@@ -98,6 +98,7 @@ class Datasetline_array(Dataset):
         self.num_frames = num_frames
         self.num_interval = num_interval
 
+        # 简洁复刻：直接计算全局均值方差 (Global Normalization)
         self.mean = np.mean(data)
         self.std = np.std(data)
         
@@ -109,14 +110,20 @@ class Datasetline_array(Dataset):
         self.data = self.data.astype(dtype)
 
     def __getitem__(self, item):
+        # 随机采样 Batch 和 Time
         i_b = np.random.choice(self.num_b, 1)[0]
+        # 预留足够的长度给 num_frames * num_interval
         max_time = self.num_t - self.num_frames * self.num_interval
         i_t = np.random.choice(max_time, 1)[0]
         
+        # 核心切片逻辑 (Slicing)，替代 np.arange
+        # Shape: [Frames, Space, Channel]
         x = self.data[i_b, i_t : i_t + self.num_frames * self.num_interval : self.num_interval, :]
         
+        # Transpose: [Frames, Space, Channel] -> [Frames, Channel, Space]
         x = x.transpose(0, 2, 1)
         
+        # Masks (适配 1D 空间数据 shape)
         latent_mask = np.ones([self.num_frames, 1, 1]).astype(bool)
         obs_mask = np.zeros([self.num_frames, 1, 1]).astype(bool)
         frame_indices = np.arange(self.num_frames)
@@ -129,25 +136,34 @@ class Datasetline_array(Dataset):
 
 
 class Dataset1DTube_p(Dataset):
+    """
+    基于 DatasetKSE 简洁风格的 1D 声压数据集类。
+    实现了统一归一化 (Global Normalization)。
 
+    预期 data shape: [Batch, Time, Space, 1]
+    """
+    # 移除 labels 参数
     def __init__(self, data, length, num_frames, num_interval, is_scalar=True, dtype='float32'):
         super().__init__()
         self.length = length
         
-
+        # --- 1. 通用设置 ---
+        # 假设 data shape: [Batch, Time, Space, Channel]
         self.num_b = data.shape[0]
         self.num_t = data.shape[1]
-        self.num_h = data.shape[2]
-        self.num_c = data.shape[3]
+        self.num_h = data.shape[2] # 空间维度 H=64
+        self.num_c = data.shape[3] # 通道维度 C=1
         
         self.num_frames = num_frames 
         self.num_interval = num_interval 
         
         assert self.num_c == 1, "Dataset1DTube_p requires single channel (Pressure)."
 
+        # --- 2. 统一归一化 (Global Normalization) ---
+        # 对整个数据集求均值和标准差
         self.mean = np.mean(data)
         self.std = np.std(data)
-        self.std = np.maximum(self.std, 1e-6)
+        self.std = np.maximum(self.std, 1e-6) # 防止除以 0
 
         if is_scalar:
             self.data = (data - self.mean) / self.std
@@ -184,13 +200,19 @@ class Dataset1DTube_p(Dataset):
     def __len__(self):
         return self.length
 
+    # 兼容原有的获取归一化参数的方法，返回 mean 和 std
     def get_data_scalar(self):
+        """返回 (mean, std) 的标量值（此处为统一归一化后的标量）。"""
+        # 由于是统一归一化，直接返回标量
         return self.mean, self.std
 
 
 
 
 class DataScalar:
+    """
+    通用版：支持 1D (Tube) 和 2D (Sound) 的反归一化
+    """
     def __init__(self, mean, std):
         import torch
         self.mean = torch.tensor(mean).float()
@@ -214,6 +236,8 @@ class DataScalar:
 class Dataset2DSound_P_Vx_Vy(Dataset):
     def __init__(self, data, length, num_frames, num_interval, is_scalar=True, dtype='float32'):
         super().__init__()
+
+        """data: ndarray with shape b*t*h*w*c"""
         self.length = length
         self.num_b = len(data)
         self.num_t = len(data[0])
@@ -230,11 +254,21 @@ class Dataset2DSound_P_Vx_Vy(Dataset):
             indexing='ij'
         )
 
+        # --- 通道独立归一化 (Channel-wise Independent) ---
         if is_scalar:
+            print("Calculating Independent Channel-wise Statistics...")
+
+            # axis=(0, 1, 2, 3) 表示聚合 Batch, Time, H, W，保留 Channel 维度独立
+            # shape: (1, 1, 1, 1, 3)
             self.mean = np.mean(data, axis=(0, 1, 2, 3), keepdims=True)
             self.std = np.std(data, axis=(0, 1, 2, 3), keepdims=True)
+
+            # 防止除以 0
             self.std = np.maximum(self.std, 1e-6)
 
+            print("-" * 30)
+            print(f"DEBUG: Dataset Statistics (Independent)")
+            print(f"  Mean shape: {self.mean.shape}")
             
             if self.num_c >= 3:
                 p_std = self.std[0,0,0,0,0]
@@ -259,14 +293,25 @@ class Dataset2DSound_P_Vx_Vy(Dataset):
 
     def __getitem__(self, item):
         i_b = np.random.choice(self.num_b, 1)[0]
+
+        # 计算最大允许的起始时间索引
         max_time_idx = self.num_t - (self.num_frames - 1) * self.num_interval - 1
         i_t = np.random.choice(max_time_idx, 1)[0]
+
+        # 你的数据 H=64, W=64，若全图训练则起始点为 0
         i_w = np.random.choice(self.num_w - self.num_w + 1, 1)[0]
         i_h = np.random.choice(self.num_h - self.num_h + 1, 1)[0]
+
+        # 构造时间索引
         time_indices = i_t + np.arange(self.num_frames) * self.num_interval
         
+        # 取数据 (Frames, H, W, C)
         x = self.data[i_b, time_indices, i_h:i_h+self.num_h, i_w:i_w+self.num_w, :]
+
+        # 转置为 PyTorch 格式: (T, H, W, C) -> (T, C, H, W)
         x = x.transpose(0, 3, 1, 2)
+
+        # 构造 Masks
         latent_mask = np.ones([self.num_frames, 1, 1, 1]).astype(bool)
         obs_mask = np.zeros([self.num_frames, 1, 1, 1]).astype(bool)
         frame_indices = np.arange(self.num_frames)
@@ -622,6 +667,9 @@ class Dataset1dsound(Dataset):
 
 
 class Dataset1DTube(Dataset):
+    """
+    直接接收 labels 数组。
+    """
     def __init__(self, data, labels, length, num_frames, num_interval, 
                  is_scalar=True, dtype='float32', is_condition=True):
         
@@ -645,7 +693,7 @@ class Dataset1DTube(Dataset):
             self.data = data
         self.data = self.data.astype(dtype)
         self.is_condition = is_condition
-        self.labels = labels
+        self.labels = labels # (N_samples,) 存储真实的频率值 (例如 150, 150, ..., 400)
 
         if self.is_condition:
             self.fre_min = 150.0
@@ -687,6 +735,9 @@ class Dataset1DTube(Dataset):
         return self.length
 
 class Dataset1DTube_Channel_Wise_Normalization(Dataset):
+    """
+    修改版：支持按通道独立归一化 (Channel-wise Normalization)
+    """
     def __init__(self, data, labels, length, num_frames, num_interval, 
                  is_scalar=True, dtype='float32', is_condition=True):
         
@@ -703,10 +754,15 @@ class Dataset1DTube_Channel_Wise_Normalization(Dataset):
         assert len(data) == len(labels), \
             f"Data ({len(data)}) and Labels ({len(labels)}) length mismatch!"
 
+        # --- 修改重点开始 ---
+        # 需要在除了 Channel 以外的所有维度上求均值和标准差
+        # data shape: (B, T, H, C) -> 我们要保留 C 维度
+        # axis=(0, 1, 2) 表示对 Batch, Time, Space 求聚合，只留下 Channel 的统计量
         
         if is_scalar:
             self.mean = np.mean(data, axis=(0, 1, 2), keepdims=True) # shape: (1, 1, 1, C)
             self.std = np.std(data, axis=(0, 1, 2), keepdims=True)   # shape: (1, 1, 1, C)
+            # 防止除以 0
             self.std = np.maximum(self.std, 1e-6)
 
             print(f"Channel-wise Stats:")
@@ -715,21 +771,32 @@ class Dataset1DTube_Channel_Wise_Normalization(Dataset):
 
             self.data = (data - self.mean) / self.std
         else:
+            # 如果不是 scalar 模式，通常也建议保留统计量以便反归一化
             self.mean = np.zeros((1, 1, 1, self.num_c))
             self.std = np.ones((1, 1, 1, self.num_c))
             self.data = data
+        # --- 修改重点结束 ---
 
 
         print("-" * 30)
         print("DEBUG CHECK: Data Statistics")
-        print(f"Mean shape: {self.mean.shape}")
+        print(f"Mean shape: {self.mean.shape}") # 应该看到 Channel 维度，例如 (1,1,1,2)
         print(f"Std shape:  {self.std.shape}")
 
-        p_std = self.std[0,0,0,0]
-        v_std = self.std[0,0,0,1]
+        # 打印具体数值
+        p_std = self.std[0,0,0,0] # 假设通道0是声压
+        v_std = self.std[0,0,0,1] # 假设通道1是振速
 
         print(f"Channel 0 (Pressure) Std: {p_std:.6f}")
         print(f"Channel 1 (Velocity) Std: {v_std:.6f}")
+
+        if abs(p_std - v_std) < 1e-4:
+            print("!!! 警告：两个通道的标准差几乎一样，你可能还在用统一归一化！")
+        else:
+            print(">>> 成功：检测到通道独立归一化，振速 Std 应该很小。")
+        print("-" * 30)
+
+
         
         self.data = self.data.astype(dtype)
         self.is_condition = is_condition
@@ -773,6 +840,39 @@ class Dataset1DTube_Channel_Wise_Normalization(Dataset):
         return self.length
     def get_data_scalar(self):
         return DataScalar(self.mean, self.std)
+
+'''
+class DataScalar:
+    """
+    用于在计算物理 Loss 时将数据反归一化回真实单位
+    """
+    def __init__(self, mean, std):
+        import torch
+        # 确保转为 Tensor 并在正确的设备上 (在 forward 中会自动处理 device)
+        self.mean = torch.tensor(mean).float()
+        self.std = torch.tensor(std).float()
+
+        # 调整维度以适配 [Batch, Time, Channel, Space]
+        # Dataset 中 mean 是 [1, 1, 1, C] -> 对应 data [B, T, H, C]
+        # 但是网络输出通常是 [Batch, Time, Channel, Space]
+        # 所以我们需要把 mean/std 变为 [1, 1, C, 1]
+        self.mean = self.mean.permute(0, 1, 3, 2)
+        self.std = self.std.permute(0, 1, 3, 2)
+
+    def __call__(self, x):
+        # x: Normalized data [Batch, Time, Channel, Space]
+        # returns: Real unit data
+        if x.device != self.mean.device:
+            self.mean = self.mean.to(x.device)
+            self.std = self.std.to(x.device)
+        return x * self.std + self.mean
+'''
+
+
+
+
+
+
 
 
 class DatasetCylinder(Dataset):
@@ -939,24 +1039,228 @@ class DatasetKolInverse(Dataset):
 
 class Dataset2DSound(Dataset):
     def __init__(self, data, length, num_frames, num_interval, is_scalar=True, dtype='float32', is_condition=False):
+        # data	ndarray	输入数据，形状为 (batch, time, height, width, channels)
+        # length	int	数据集总样本数（通常为 num_samples 参数传入）
+        # num_frames	int	每个样本包含的时间步数（输入序列长度）
+        # num_interval	int	时间步采样间隔（如 num_interval=2 表示每隔2步采样一次）
+        # is_scalar	bool	是否对数据进行标准化（均值和方差归一化）
+        # dtype	str	输出数据类型（如 float32）
+        # is_condition	bool	是否添加条件参数到输入中
         super().__init__()
         """data: ndarray with shape b*t*h*w*c"""
         self.length = length
-        self.num_b = len(data)          
-        self.num_t = len(data[0])      
-        self.num_w = data.shape[-3]     
-        self.num_h = data.shape[-2]     
-        self.num_c = data.shape[-1]     
-        self.num_frames = num_frames    
-        self.num_interval = num_interval        
-        self.is_condition = False        
+        # 数据形状解析
+        self.num_b = len(data)          # Batch维度
+        self.num_t = len(data[0])       # 时间步数
+        self.num_w = data.shape[-3]     # 空间宽度（x方向）
+        self.num_h = data.shape[-2]     # 空间高度（y方向）
+        self.num_c = data.shape[-1]     # 通道数（如速度u/v分量）
+        self.num_frames = num_frames    # 每个训练样本中需要提取的时间步数（即输入模型的时间序列长度）
+        self.num_interval = num_interval        # list [num_interval for dataset1, num_interval for dataset2, ...]
+        self.is_condition = False        # 是否拼接条件参数
+        # 生成二维网格, _ 表示忽略生成的 x_grid（不需要保存 x 坐标）。
         _, self.y = np.meshgrid(np.linspace(0, 2 * np.pi, self.num_w, endpoint=False),
                            np.linspace(0, 2 * np.pi, self.num_h, endpoint=False), indexing='ij')
 
+        self.mean = np.mean(data)                                          # 全局均值
+        self.std = np.std(data)                                            # 全局标准差
+        if is_scalar:
+            self.data = (data-self.mean)/self.std                          # 标准化
+        else:
+            self.data = data
+        self.data = self.data.astype(dtype)                                # 类型转换（如float32）
+
+    # 定义如何动态生成单个数据样本
+    def __getitem__(self, item):
+        # 随机选择批次、起始时间、空间窗口
+        i_b = np.random.choice(self.num_b, 1)[0]
+        # 随机选择一个起始时间点，用于提取连续的时间序列片段。
+        # 最大允许起始位置：num_t - num_frames * num_interval（如 700 - 10 = 690）。
+        i_t = np.random.choice(self.num_t-self.num_frames*self.num_interval, 1)[0]
+        # 随机选择一个空间起始位置（x 方向），用于提取局部空间区域。
+        # 最大允许起始位置：num_w - num_h + 1（如 64 - 64 + 1 = 1）。
+        # 确保：从 i_w 开始，提取 num_h 个连续的 x 方向网格时，不超过数据范围。
+        i_w = np.random.choice(self.num_w-self.num_h+1, 1)[0]
+
+        # 提取时空数据 [T, H, W, C] → [T, C, H, W]
+        # 时间维度：若 num_frames=16, num_interval=2：总覆盖时间步：16 * 2 = 32 实际提取索引：i_t, i_t+2, i_t+4, ..., i_t+30（共16步）
+        # 空间维度：若 num_w=128, num_h=64：提取 x 方向第 i_w 到 i_w+64 的网格区域
+        #切片后的数据形状:
+        #输入形状：(batch, time, height, width, channels)
+        #切片后形状：(num_frames, height, num_h, channels)
+        x = self.data[i_b, i_t:i_t+self.num_frames*self.num_interval:self.num_interval, i_w:i_w+self.num_h]
+        # 维度转置操作:
+        # 原始维度顺序：(num_frames, height, num_h, channels) → 索引顺序 (0, 1, 2, 3)
+        # 目标维度顺序：(num_frames, channels, height, num_h) → 新索引顺序 (0, 3, 1, 2)
+        # 转置后的数据形状
+        # 输出形状：(num_frames, channels, height, num_h)
+        x = x.transpose(0, 3, 1, 2)
+
+        # 数据增强：随机平移（利用周期性边界）
+        shift_x, shift_y = np.random.choice(self.num_h, 1)[0], np.random.choice(self.num_w, 1)[0]   # data aug.
+        # 沿高度（axis=2）和宽度（axis=3）方向循环平移数据。
+        x = np.roll(x, (shift_x, shift_y), axis=(2, 3))     # data aug.
+        # 隐变量掩码生成
+        # 创建一个全为 True 的掩码，标记潜在变量需处理的位置
+        # 形状：(num_frames, 1, 1, 1)，与输入数据的 (num_frames, channels, height, width) 兼容
+        # 用途：在模型中标记需要参与潜在空间计算的区域（如所有时间步和位置）
+        # np.astype(bool):数据类型转换为布尔类型（bool）
+        latent_mask = np.ones([self.num_frames, 1, 1, 1]).astype(bool)
+        # 观测掩码生成：创建一个全为 False 的掩码，标记观测数据的位置
+        obs_mask = np.zeros([self.num_frames, 1, 1, 1]).astype(bool)
+        frame_indices = np.arange(self.num_frames)    # 生成从 0 到 num_frames-1 的连续整数数组。标识每个时间步的索引，用于模型的时间步跟踪或条件输入
+
+        # 条件参数拼接（雷诺数和外力项）
+        if self.is_condition:
+            return x, frame_indices, obs_mask, latent_mask       # B T C H W
+        else:
+            return x, frame_indices, obs_mask, latent_mask       # B T C H W
+        # 为 DataLoader 提供数据集的总样本数
+    def __len__(self):
+        return self.length
+
+class Dataset2DSound_smalldata1(Dataset):
+    def __init__(self, data, length, num_frames, num_interval,
+                 is_scalar=True, dtype='float32', is_condition=True):
+        super().__init__()
+        """
+        data: 声学数据张量 (batch_size, time_steps, height, width, channels)
+        """
+        self.length = length
+        self.num_frames = num_frames
+        self.num_interval = num_interval
+        self.is_condition = is_condition
+        self.dtype = dtype
+
+        # 数据形状信息
+        self.num_b = data.shape[0]  # 实际批次大小
+        self.num_t = data.shape[1]
+        self.num_h = data.shape[2]
+        self.num_w = data.shape[3]
+        self.num_c = data.shape[4]
+
+        # 创建条件参数（只包含实际存在的批次）
+        # 点声源频率和边界加速度激励频率都来自 [50, 100, 150, 200, 250, 300]
+        self.source_freq = np.zeros(self.num_b)
+        self.boundary_freq = np.zeros(self.num_b)
+
+        # 完整参数空间对应的频率
+        full_frequencies = np.array([50, 100, 150, 200, 250, 300])
+
+        # 训练集排除的测试点（源频，边界频）
+        test_points = [
+            (150, 150),  # 索引14
+            (150, 200),  # 索引15
+            (150, 250),  # 索引16
+            (200, 150),  # 索引20
+            (200, 200)   # 索引21
+        ]
+
+        # 遍历所有可能的参数组合
+        available_idx = 0
+        for source in full_frequencies:
+            for boundary in full_frequencies:
+                # 如果是测试点则跳过
+                if (source, boundary) in test_points:
+                    continue
+
+                # 确保不超过实际批次数量
+                if available_idx >= self.num_b:
+                    break
+
+                # 记录当前参数组合
+                self.source_freq[available_idx] = source
+                self.boundary_freq[available_idx] = boundary
+                available_idx += 1
+
+        # 数据标准化
+        self.mean = np.mean(data)
+        self.std = np.std(data)
+        if is_scalar:
+            self.data = (data - self.mean) / self.std
+        else:
+            self.data = data
+
+        # 转换数据类型
+        if dtype == 'float32':
+            self.data = self.data.astype(np.float32)
+        elif dtype == 'float64':
+            self.data = self.data.astype(np.float64)
+
+    def __getitem__(self, item):
+        # 随机选择批次和时间起点
+        i_b = np.random.choice(self.num_b)
+        i_t = np.random.choice(self.num_t - self.num_frames * self.num_interval)
+
+        # 提取时间序列数据
+        x = self.data[i_b, i_t:i_t + self.num_frames * self.num_interval:self.num_interval]
+        # 转换为 PyTorch 格式:时间 × 通道 × 高度 × 宽度
+        x = x.transpose(0, 3, 1, 2)
+
+        # 获取当前批次的声源条件
+        source_freq = self.source_freq[i_b]
+        boundary_freq = self.boundary_freq[i_b]
+
+        # 创建条件向量
+        frame_indices = np.arange(self.num_frames)
+        obs_mask = np.zeros([self.num_frames, 1, 1, 1]).astype(bool)
+        latent_mask = np.ones([self.num_frames, 1, 1, 1]).astype(bool)
+
+        if self.is_condition:
+            # 返回数据+条件
+            return (
+                torch.tensor(x),  # 声场数据
+                torch.tensor(frame_indices),  # 时间索引
+                torch.tensor(obs_mask),  # 观测掩码
+                torch.tensor(latent_mask),  # 潜在变量掩码
+                torch.tensor([source_freq, boundary_freq])  # 声源条件
+            )
+        else:
+            # 只返回数据
+            return (
+                torch.tensor(x),
+                torch.tensor(frame_indices),
+                torch.tensor(obs_mask),
+                torch.tensor(latent_mask)
+            )
+
+    def __len__(self):
+        return self.length
+
+
+
+class Dataset2DGaussPulse(Dataset):
+    def __init__(self, data, length, num_frames, num_interval,
+                 is_scalar=True, dtype='float32', is_condition=True):
+        super().__init__()
+
+        self.length = length
+        self.num_b = len(data) # Total number of simulation batches (125 in your case)
+        self.num_t = len(data[0]) if self.num_b > 0 else 0
+        self.num_h = data.shape[-3]
+        self.num_w = data.shape[-2]
+        self.num_c = data.shape[-1]     
+        self.num_frames = num_frames    
+        self.num_interval = num_interval        
+        self.is_condition = is_condition
+
+        _, self.y = np.meshgrid(np.linspace(0, 63, self.num_w, endpoint=False),
+                           np.linspace(0, 63, self.num_h, endpoint=False), indexing='ij')
+
+        ma_values = [0.3, 0.4, 0.5, 0.6, 0.7]
+        v_beta_values = [0.02, 0.03, 0.04, 0.05, 0.06]
+        ma_grid, v_beta_grid = np.meshgrid(ma_values, v_beta_values, indexing='ij')
+
+        self.ma = ma_grid.reshape(-1) # Shape (25,)
+        self.num_ma = len(self.ma)
+
+        self.v = v_beta_grid.reshape(-1) # Shape (25,)
+
+        # Data normalization
         self.mean = np.mean(data)                                         
         self.std = np.std(data)                                          
         if is_scalar:
-            self.data = (data-self.mean)/self.std                          
+            self.data = (data - self.mean) / self.std
         else:
             self.data = data
         self.data = self.data.astype(dtype)                               
@@ -965,18 +1269,20 @@ class Dataset2DSound(Dataset):
         i_b = np.random.choice(self.num_b, 1)[0]
         i_t = np.random.choice(self.num_t-self.num_frames*self.num_interval, 1)[0]
         i_w = np.random.choice(self.num_w-self.num_h+1, 1)[0]
-
         x = self.data[i_b, i_t:i_t+self.num_frames*self.num_interval:self.num_interval, i_w:i_w+self.num_h]
         x = x.transpose(0, 3, 1, 2)
-
         shift_x, shift_y = np.random.choice(self.num_h, 1)[0], np.random.choice(self.num_w, 1)[0]   # data aug.
         x = np.roll(x, (shift_x, shift_y), axis=(2, 3))     # data aug.
         latent_mask = np.ones([self.num_frames, 1, 1, 1]).astype(bool)
         obs_mask = np.zeros([self.num_frames, 1, 1, 1]).astype(bool)
         frame_indices = np.arange(self.num_frames) 
+
         if self.is_condition:
-            return x, frame_indices, obs_mask, latent_mask       # B T C H W
+            ma_condition = self.ma[i_b%self.num_ma]*1*np.ones_like(self.y)[np.newaxis, np.newaxis].repeat(self.num_frames, 0)
+            v_beta_condition = self.v[i_b%self.num_ma]*1*np.ones_like(self.y)[np.newaxis, np.newaxis].repeat(self.num_frames, 0)
+            return np.concatenate([x, ma_condition, v_beta_condition], axis=1), frame_indices, obs_mask, latent_mask
         else:
-            return x, frame_indices, obs_mask, latent_mask       # B T C H W
+            return x, frame_indices, obs_mask, latent_mask
+
     def __len__(self):
         return self.length

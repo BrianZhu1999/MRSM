@@ -1,0 +1,4 @@
+-r requirements.txt
+jupyterlab==4.4.0
+ipykernel==6.29.5
+cartopy==0.24.1

@@ -36,32 +36,53 @@ def loss_fn_video(net, sde, batch, eps=1e-5, **kwarg):
     std_e = std[:, None, None, None, None] if len(batch.shape)==5 else std[:, None, None, None]
     perturbed_data = mean + std_e * z 
 
-    kwarg['x0'] = batch
-    kwarg['timesteps'] = std
-    score, _ = net(perturbed_data, **kwarg)
+    # Keep the caller's dictionary immutable: the same masks are reused by the
+    # DSM and FPE terms during one optimizer step.
+    net_kwarg = dict(kwarg)
+    net_kwarg['x0'] = batch
+    net_kwarg['timesteps'] = std
+    score, _ = net(perturbed_data, **net_kwarg)
     losses = torch.square(score * std_e + z)
     losses = torch.mean(losses.reshape(losses.shape[0], -1), dim=-1)
     loss = torch.mean(losses)
     return loss
 
 
-def fpe_regularizer_loss(net, sde, batch, eps=1e-5, alpha=0.15, beta=0.01, m=2, h_s=0.001, h_d=0.0005, **kwargs):
-    t = torch.rand(batch.shape[0], device=batch.device) * (sde.T - eps) + eps
+def fpe_regularizer_loss(net, sde, batch, eps=1e-5, alpha=0.15, beta=0.01, m=2,
+                         h_s=0.001, h_d=0.0005, **kwargs):
+    """Score FPE regularization for drift-free variance-exploding diffusion.
+
+    alpha weights the vector residual, beta weights the scalar FPE term, and
+    m is the residual-norm exponent. h_s and h_d are diffusion-time offsets.
+    """
+    # The DSM network is conditioned on sigma(t), not on the normalized time t.
+    # Stay away from both endpoints so the finite-difference stencil is valid.
+    margin = max(float(h_s), float(h_d), float(eps))
+    if sde.T <= 2 * margin:
+        raise ValueError('FPE time stencil does not fit inside the SDE interval')
+    t = torch.rand(batch.shape[0], device=batch.device) * (sde.T - 2 * margin) + margin
+
+    # Independently sample diffusion time and Gaussian noise for the FPE term.
     z = torch.randn_like(batch)
     mean, std = sde.marginal_prob(batch, t)
     std_expanded = std[:, None, None, None, None] if batch.ndim == 5 else std[:, None, None, None]
     perturbed_data = mean + std_expanded * z
     perturbed_data.requires_grad_(True)
     
-    score = net(perturbed_data, x0=batch, timesteps=t, **kwargs)[0]
+    # 3. 计算得分 s_θ(x, t)
+    score_condition = sde.marginal_prob(torch.zeros_like(t), t)[1]
+    score = net(perturbed_data, x0=batch, timesteps=score_condition, **kwargs)[0]
     
+    # 4. 计算 Score FPE 残差 ε[s_θ] 和 标量项 L[s_θ]
+    #    L_term 对应论文中的 L[s_θ]
     residual, L_term = compute_fpe_terms(net, sde, perturbed_data, batch, t, score, h_s, h_d, **kwargs)
     
+    # 5. 计算正则项 (论文式 19)
     _, g_t = sde.sde(perturbed_data, t)
     while g_t.ndim < residual.ndim:
         g_t = g_t.unsqueeze(-1)
         
-    lambda_fp = g_t**2
+    lambda_fp = g_t**2  # Time weighting: lambda_FP(t) = g(t)^2.
     
     norm_dim = tuple(range(1, residual.ndim))
     norm_residual = torch.norm(lambda_fp * residual, p=2, dim=norm_dim)
@@ -78,31 +99,40 @@ def fpe_regularizer_loss(net, sde, batch, eps=1e-5, alpha=0.15, beta=0.01, m=2, 
 
 def compute_fpe_terms(net, sde, x, x0, t, score, h_s, h_d, **kwargs):
  
-    t_plus = t + h_d
-    t_minus = t - h_s
+    # Time derivative at fixed perturbed field x.
+    eps = 1e-5
+    t_plus = torch.clamp(t + h_d, min=eps, max=sde.T)
+    t_minus = torch.clamp(t - h_s, min=eps, max=sde.T)
+    # Use the effective distances after clamping for endpoint-safe calls.
+    h_d_eff = (t_plus - t).clamp_min(torch.finfo(t.dtype).eps)
+    h_s_eff = (t - t_minus).clamp_min(torch.finfo(t.dtype).eps)
+    while h_d_eff.ndim < score.ndim:
+        h_d_eff = h_d_eff.unsqueeze(-1)
+        h_s_eff = h_s_eff.unsqueeze(-1)
     
-    eps = 1e-5  
-    t_plus = torch.clamp(t_plus, min=eps, max=sde.T)
-    t_minus = torch.clamp(t_minus, min=eps, max=sde.T)
+    sigma_plus = sde.marginal_prob(torch.zeros_like(t_plus), t_plus)[1]
+    sigma_minus = sde.marginal_prob(torch.zeros_like(t_minus), t_minus)[1]
+    score_plus = net(x, x0=x0, timesteps=sigma_plus, **kwargs)[0]
+    score_minus = net(x, x0=x0, timesteps=sigma_minus, **kwargs)[0]
     
-    score_plus = net(x, x0=x0, timesteps=t_plus, **kwargs)[0]  
-    score_minus = net(x, x0=x0, timesteps=t_minus, **kwargs)[0] 
+    # Three-point derivative on the actual t grid, while the network receives
+    # sigma(t) as its conditioning label.
+    term_plus = h_s_eff / (h_d_eff * (h_s_eff + h_d_eff)) * score_plus
+    term_current = ((h_d_eff - h_s_eff) / (h_s_eff * h_d_eff)) * score
+    term_minus = -h_d_eff / (h_s_eff * (h_s_eff + h_d_eff)) * score_minus
+    dt_score = term_plus + term_current + term_minus
     
-    h_s_2 = h_s**2
-    h_d_2 = h_d**2
-    denominator = h_s * h_d * (h_s + h_d)
-    
-    term_plus = h_s_2 * score_plus
-    term_current = (h_d_2 - h_s_2) * score 
-    term_minus = -h_d_2 * score_minus
-    
-    dt_score = (term_plus + term_current + term_minus) / (denominator + 1e-9)
-
+    # One-vector Hutchinson estimate of the spatial divergence.
     v = torch.randn_like(x)  
     vjp = autograd.grad(outputs=torch.sum(score * v), inputs=x, create_graph=True, retain_graph=True)[0]
     
     norm_dim = tuple(range(1, vjp.ndim))
-    div_score = torch.sum(vjp * v, dim=norm_dim, keepdim=True)
+    div_score = torch.sum(vjp * v, dim=norm_dim, keepdim=True) # Shape [B, 1, 1, 1, 1]
+
+    # 3. 计算 L[s_θ] 标量项及其梯度
+
+    # 论文中 L[·] 的定义
+    # L[s_θ] = 0.5g² divₓ(s_θ) + 0.5g² ||s_θ||₂² - ⟨f, s_θ⟩ - divₓ(f)
     
     _, g = sde.sde(x, t)
     g2 = g**2
@@ -115,16 +145,21 @@ def compute_fpe_terms(net, sde, x, x0, t, score, h_s, h_d, **kwargs):
         
     s_norm_sq = torch.sum(score**2, dim=norm_dim, keepdim=True) 
     
+    # L_term 即 L[s_θ](x, t)
     L_term = (0.5 * g2 * div_score + 0.5 * g2 * s_norm_sq - f_s_dot - div_f) # Shape [B, 1, 1, 1, 1]
     
+    # 计算 ∇ₓ L[s_θ]
     grad_L = autograd.grad(
         outputs=torch.sum(L_term),  
         inputs=x,  
         create_graph=True,
         retain_graph=True
-    )[0] 
+    )[0] # Shape [B, T, C, H, W]
 
+    # Score FPE residual: partial_t score - grad_x L.
     residual = dt_score - grad_L
+
+    # 返回残差和 L 标量项
     return residual, L_term
 
 

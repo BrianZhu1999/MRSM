@@ -128,9 +128,10 @@ class VESDE(SDE):
         self.N = N
         self.config = config
 
+        # 关键修复：将张量初始化到与模型相同的设备
         self.device = config.device if hasattr(config, 'device') else 'cuda' if torch.cuda.is_available() else 'cpu'
         self.discrete_sigmas = torch.exp(
-            torch.linspace(np.log(self.sigma_min), np.log(self.sigma_max), N, device=self.device)
+            torch.linspace(np.log(self.sigma_min), np.log(self.sigma_max), N, device=self.device)  # 指定设备
         )
 
     @property
@@ -160,16 +161,16 @@ class VESDE(SDE):
 
     def discretize(self, x, t):
         """SMLD(NCSN) discretization."""
-        timestep = (t * (self.N - 1) / self.T).long().to(self.device)
-        sigma = self.discrete_sigmas[timestep]
+        timestep = (t * (self.N - 1) / self.T).long().to(self.device)  # 强制移动到与 discrete_sigmas 相同的设备
+        sigma = self.discrete_sigmas[timestep]  # 直接索引
 
         adjacent_sigma = torch.where(
             timestep == 0,
-            torch.zeros_like(t, device=self.device),
+            torch.zeros_like(t, device=self.device),  # 确保零张量在同一设备
             self.discrete_sigmas[timestep - 1]
         )
 
-        f = torch.zeros_like(x, device=self.device)
+        f = torch.zeros_like(x, device=self.device)  # 初始化到同一设备
         G = torch.sqrt(sigma ** 2 - adjacent_sigma ** 2)
         return f, G
 

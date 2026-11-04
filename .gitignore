@@ -1,0 +1,17 @@
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+.vscode/
+.venv/
+data/
+results/
+results_FNO*/
+results_LNO*/
+outputs/
+downloads/
+*.pth
+*.npy
+*.npz
+*.zip
+*.rar
+verification/

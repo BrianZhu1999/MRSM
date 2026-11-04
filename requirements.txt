@@ -1,0 +1,8 @@
+# Python 3.12. Install the desired PyTorch CPU/CUDA build first.
+torch==2.6.0
+numpy==1.26.4
+scipy==1.14.1
+matplotlib==3.10.3
+einops==0.8.0
+tqdm==4.67.1
+pandas==2.2.3
