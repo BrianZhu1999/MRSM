@@ -7,7 +7,7 @@ physics-guided ISS (PI-ISS). The examples cover acoustic free fields, standing-w
 tubes, a measured virtual array, Kolmogorov flow and ERA5 weather fields.
 
 - [Paper on arXiv](https://arxiv.org/abs/2605.22338)
-- [Data and model downloads](https://doi.org/10.5281/zenodo.19398315)
+- [Data and model downloads](https://doi.org/10.5281/zenodo.23938017)
 - [Case settings and notebook instructions](docs/cases.md)
 - [Data files and model packages](docs/data.md)
 - [Training and sampling commands](docs/running.md)

@@ -1,10 +1,7 @@
 # Data and model files
 
-The published record is [Zenodo 19398315](https://doi.org/10.5281/zenodo.19398315).
-It contains the free-field training array and the original acoustic and
-Kolmogorov model archives. The complete data and model packages for the
-repository examples are listed below and are supplied through the Zenodo
-release associated with this repository.
+The current data and model release is [Zenodo 23938017](https://doi.org/10.5281/zenodo.23938017).
+It contains the complete data and model packages for the repository examples.
 
 | Archive | Size (GB) |
 | --- | ---: |
@@ -14,6 +11,7 @@ release associated with this repository.
 | `weights_standing_wave.zip` | 0.550 |
 | `weights_line_array.zip` | 0.103 |
 | `weights_baselines.zip` | 0.741 |
+| `acoustic_free_field.npy` | 4.473 |
 | `data_free_field_test.zip` | 0.310 |
 | `data_kolmogorov_train.zip.001`–`.009` | 9.175 |
 | `data_kolmogorov_test.zip` | 0.524 |
@@ -33,9 +31,9 @@ Every model package includes its configuration and normalization statistics.
 Every data package includes an English description of array dimensions,
 variables and processing. The numerical data in the archives are unchanged.
 
-The existing `acoustic_free_field.npy` is the free-field **training** array.
-Place it at `data/anechoic_high_prec_dataset_last700_2.npy`. The separate test
-array is supplied in `data_free_field_test.zip`.
+`acoustic_free_field.npy` is the free-field **training** array. Place it at
+`data/anechoic_high_prec_dataset_last700_2.npy`. The separate test array is
+supplied in `data_free_field_test.zip`.
 
 ## Model selection
 
