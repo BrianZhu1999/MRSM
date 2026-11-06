@@ -1,10 +1,10 @@
 # Data and model files
 
 The published record is [Zenodo 19398315](https://doi.org/10.5281/zenodo.19398315).
-It currently contains the free-field training array and the original acoustic
-and Kolmogorov model archives. The following complete case packages have been
-prepared for the next version of the same record. Their download links become
-available when that version is published.
+It contains the free-field training array and the original acoustic and
+Kolmogorov model archives. The complete data and model packages for the
+repository examples are listed below and are supplied through the Zenodo
+release associated with this repository.
 
 | Archive | Size (GB) |
 | --- | ---: |
@@ -15,12 +15,17 @@ available when that version is published.
 | `weights_line_array.zip` | 0.103 |
 | `weights_baselines.zip` | 0.741 |
 | `data_free_field_test.zip` | 0.310 |
-| `data_kolmogorov_train.zip` | 9.175 |
+| `data_kolmogorov_train.zip.001`–`.009` | 9.175 |
 | `data_kolmogorov_test.zip` | 0.524 |
 | `data_era5.zip` | 2.142 |
 | `data_standing_wave.zip` | 0.764 |
 | `data_line_array.zip` | 0.308 |
 | `data_line_array_simulation.zip` | 2.048 |
+
+The Kolmogorov training archive is distributed as nine consecutive binary
+volumes, together with `README_KOLMOGOROV_ARCHIVE.txt` and
+`merge_kolmogorov_archive.py`. Run the merger in the download directory to
+reconstruct and verify `data_kolmogorov_train.zip`.
 
 Download the relevant archives and extract them into the repository root. The
 archives create `data/`, `results/<model>/` and the FNO/LNO result directories.

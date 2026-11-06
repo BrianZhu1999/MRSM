@@ -52,10 +52,15 @@ The ERA5 reconstruction example uses 5% observations and SDE observation factor 
 
 `source_data/experiment_results_20260331_204711.csv` and `source_data/baselines_comparison_20260331_213441.csv` are unchanged numerical tables from the original free-field analysis. `source_figures.ipynb` retains the original plotted observation-rate subset and the upper-outlier removal used in the downsampling panel: a value is omitted when it exceeds Q3 + 1.5 times the interquartile range. The original CSV files contain all recorded rows and trial columns. The runnable random-observation notebook additionally displays all observation rates.
 
-The source downsampling summary treats values at or above the original sentinel threshold 999 as invalid; this condition is retained in its table-writing code. Failed model loading or failed inference now raises an exception, so missing checkpoints cannot be presented as randomly initialized or zero-valued baseline predictions. No synthetic placeholder metrics are generated.
+The downsampling table excludes values at or above the sentinel threshold 999.
+Model loading and inference require the specified checkpoint, and the
+evaluator reports metrics for completed runs.
 
 ## Notebook preparation and checks
 
 The notebooks contain selected model-loading, input-preparation, sampling, measurement and plotting cells. Saved outputs, execution counts, unused alternate runs, optional movies and machine-specific paths were removed. Absolute result paths in configuration files are overridden with the selected checkpoint directory. Baseline imports use the repository's model modules, and missing checkpoint files are reported before restoration.
 
-All code cells pass Python parsing and compilation. Cross-cell names were checked against imported sampler definitions. Full numerical execution of the cases is recorded separately in the release validation results; notebook preparation alone does not repeat the complete multi-seed evaluation.
+All code cells pass Python parsing and compilation, and their imported sampler
+names match the repository definitions. The release validation report gives
+the numerical checks for the recorded conditions; the distributed notebooks
+and stored tables provide the remaining observation-rate and multi-seed grids.
