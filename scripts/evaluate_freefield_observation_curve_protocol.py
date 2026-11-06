@@ -69,7 +69,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--allow-source-parity-failure",
         action="store_true",
-        help="finish the audit and mark parity failures instead of aborting after source evaluation",
+        help="finish evaluation and record out-of-tolerance reference comparisons",
     )
     parser.add_argument("--power-ceiling-w", type=float, default=250.0)
     parser.add_argument("--power-poll-seconds", type=float, default=0.25)

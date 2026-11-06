@@ -1,10 +1,9 @@
 #!/usr/bin/env python
-"""Paired downstream sampling evaluation for the manuscript FPE campaign.
+"""Paired reconstruction evaluation before and after FPE fine-tuning.
 
-This script reproduces the retained notebook protocols without modifying the
-notebooks. Results are written after every trial so long evaluations can be
-resumed safely. Checkpoint selection must use these sampled reconstruction
-metrics, not DSM or FPE optimization losses alone.
+This script uses the case-specific notebook settings. Results are saved after
+every trial to support resuming long evaluations. Reconstruction metrics
+compare checkpoints on matched observations and random seeds.
 """
 
 from __future__ import annotations
@@ -768,9 +767,7 @@ def evaluate_tube(args: argparse.Namespace, cfg: SimpleNamespace, model: torch.n
     std = measured.std(axis=(0, 1, 3))
     scaler = ChannelScaler1D(mean, std, device)
     overlap = 2
-    # Figure 4 uses the single retained notebook window beginning at sample 100.
-    # Robustness windows, if needed later, must be evaluated under a separate
-    # protocol so that they cannot be mistaken for the manuscript result.
+    # The standing-wave comparison uses the window beginning at sample 100.
     starts = [100]
     sequence_length = aligned_length(200, cfg.num_frames, overlap)
     model_positions = torch.as_tensor(valid_sensors * 4, dtype=torch.long, device=device)

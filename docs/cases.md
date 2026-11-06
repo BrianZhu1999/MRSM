@@ -42,7 +42,7 @@ The reconstruction notebooks retain the effective sampler settings from their so
 
 The pressure–velocity tube source enables `MASK_SECOND_CHANNEL=True`, so all velocity measurements are masked. Its final `sensors_to_hide=None` setting retains all 12 valid pressure positions. The exported per-channel error table evaluates those measured positions; velocity is reconstructed without observing that channel. `1dtube_v31` is the active checkpoint in this source, while the other tube notebooks and training assets include additional checkpoints.
 
-The measured line-array source adds 10 dB Gaussian noise before reconstruction without setting a separate seed for this added noise. Its seven-sensor MUSIC reference uses the measurement before the extra noise is added. This processing sequence is preserved. The original disabled SDE and ISS calls requested zero steps; they have been removed, and the active PI-ISS calculation retains 500 steps. The local interference region is x from −0.6 to 0.6 m and z from 1.6 to 1.8 m. Both MUSIC calculations use pressure and all three velocity channels and the midpoint frequency 2950 Hz.
+The measured line-array source adds 10 dB Gaussian noise before reconstruction without setting a separate seed for this added noise. Its seven-sensor MUSIC reference uses the measurement before the extra noise is added. The line-array evaluation uses the active PI-ISS calculation with 500 reverse steps. The local interference region is x from −0.6 to 0.6 m and z from 1.6 to 1.8 m. Both MUSIC calculations use pressure and all three velocity channels and the midpoint frequency 2950 Hz.
 
 Kolmogorov energy is calculated with NumPy's unnormalized two-dimensional Fourier transform. Squared Fourier amplitudes are summed within unit-width radial shells, multiplied by one half, and averaged over physical time frames. The saved spectrum CSV preserves that convention. The FPE checkpoint used by the default Kolmogorov notebooks is the original checkpoint indexed 517.
 
@@ -50,17 +50,15 @@ The ERA5 reconstruction example uses 5% observations and SDE observation factor 
 
 ## Stored figure data
 
-`source_data/experiment_results_20260331_204711.csv` and `source_data/baselines_comparison_20260331_213441.csv` are unchanged numerical tables from the original free-field analysis. `source_figures.ipynb` retains the original plotted observation-rate subset and the upper-outlier removal used in the downsampling panel: a value is omitted when it exceeds Q3 + 1.5 times the interquartile range. The original CSV files contain all recorded rows and trial columns. The runnable random-observation notebook additionally displays all observation rates.
+`source_data/experiment_results_20260331_204711.csv` and `source_data/baselines_comparison_20260331_213441.csv` are numerical tables from the free-field analysis. `source_figures.ipynb` uses the plotted observation-rate subset and upper-outlier removal specified for the downsampling panel: a value is omitted when it exceeds Q3 + 1.5 times the interquartile range. Means and population standard deviations use four trials for LNO and FNO at 4× and 5× downsampling and SDE at 6×; the other combinations use five trials. The CSV files contain all five trial values for every combination. The runnable random-observation notebook additionally displays all observation rates.
 
 The downsampling table excludes values at or above the sentinel threshold 999.
 Model loading and inference require the specified checkpoint, and the
 evaluator reports metrics for completed runs.
 
-## Notebook preparation and checks
+## Notebook contents
 
-The notebooks contain selected model-loading, input-preparation, sampling, measurement and plotting cells. Saved outputs, execution counts, unused alternate runs, optional movies and machine-specific paths were removed. Absolute result paths in configuration files are overridden with the selected checkpoint directory. Baseline imports use the repository's model modules, and missing checkpoint files are reported before restoration.
+The notebooks contain model-loading, input-preparation, sampling, measurement and plotting cells. Configuration paths resolve to the selected checkpoint directory. Baseline imports use the repository's model modules.
 
-All code cells pass Python parsing and compilation, and their imported sampler
-names match the repository definitions. The release validation report gives
-the numerical checks for the recorded conditions; the distributed notebooks
-and stored tables provide the remaining observation-rate and multi-seed grids.
+See [validation.md](validation.md) for the checked configurations. The notebooks
+and stored tables include observation-rate and multi-seed comparisons.

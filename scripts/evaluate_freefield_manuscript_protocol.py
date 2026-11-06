@@ -1,8 +1,7 @@
 #!/usr/bin/env python
-"""Reproduce the exact Figure 2f free-field nRMSE protocol.
+"""Evaluate the Figure 2f free-field nRMSE settings.
 
-This evaluator intentionally stays separate from the earlier campaign
-evaluator. It uses the source notebook's frequency, temporal windows,
+The calculation uses the source notebook's frequency, temporal windows,
 downsampling factors, sampler settings, random seed and frame-wise nRMSE.
 """
 
@@ -69,13 +68,13 @@ def parse_args() -> argparse.Namespace:
         "--model-mode",
         choices=("manuscript", "eval"),
         default="manuscript",
-        help="manuscript preserves the source notebook's train-mode dropout during sampling",
+        help="use the source notebook train-mode dropout during sampling",
     )
     parser.add_argument(
         "--source-parity-tolerance",
         type=float,
         default=5e-4,
-        help="maximum absolute nRMSE deviation from the Figure 2f CSV for checkpoint NAME=source",
+        help="maximum absolute nRMSE difference from the Figure 2f CSV for checkpoint NAME=source",
     )
     parser.add_argument("--power-ceiling-w", type=float, default=250.0)
     parser.add_argument("--power-poll-seconds", type=float, default=0.25)
@@ -491,7 +490,7 @@ def main() -> None:
                             atomic_json(args.output, report)
                             if checkpoint_name == "source" and not result_entry["source_parity_pass"]:
                                 raise RuntimeError(
-                                    "source parity failed for "
+                                    "reference comparison exceeded tolerance for "
                                     f"method={method} scale={scale} start={start}: "
                                     f"measured={measured:.9f}, paper={paper_value:.9f}, "
                                     f"delta={absolute_delta:.9f}"
