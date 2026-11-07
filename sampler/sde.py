@@ -128,7 +128,7 @@ class VESDE(SDE):
         self.N = N
         self.config = config
 
-        # 关键修复：将张量初始化到与模型相同的设备
+        # Initialize diffusion coefficients on the configured device.
         self.device = config.device if hasattr(config, 'device') else 'cuda' if torch.cuda.is_available() else 'cpu'
         self.discrete_sigmas = torch.exp(
             torch.linspace(np.log(self.sigma_min), np.log(self.sigma_max), N, device=self.device)  # 指定设备

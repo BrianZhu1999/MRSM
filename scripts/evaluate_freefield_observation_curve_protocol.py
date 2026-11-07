@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Reproduce the free-field random-observation random-observation protocol and compare FPE checkpoints."""
+"""Evaluate free-field reconstruction at random observation rates and compare FPE checkpoints."""
 
 from __future__ import annotations
 
@@ -43,7 +43,7 @@ from sampler.utils import (  # noqa: E402
 import sampler.utils as sampler_utils  # noqa: E402
 
 
-SOURCE_NOTEBOOK = SOURCE_ROOT / "V2_2dsound-Pearson_correlation_coefficient.ipynb"
+SOURCE_NOTEBOOK = SOURCE_ROOT / "notebooks/free_field/random_observations.ipynb"
 SOURCE_CSV = Path(str(SOURCE_ROOT / 'source_data/experiment_results_20260331_204711.csv'))
 TEST_DATA = Path(str(SOURCE_ROOT / 'data/anechoic_high_prec_dataset_last700_test_2.npy'))
 SCALAR_PATH = SOURCE_ROOT / "results/2DSound_v22/scalar.npy"
@@ -233,7 +233,7 @@ def validate_source_parity(
             ]
             if len(entries) != len(SEEDS):
                 raise RuntimeError(
-                    f"source parity needs {len(SEEDS)} seeds for {observable_pct}% {method}; got {len(entries)}"
+                    f"Reference comparison requires {len(SEEDS)} seeds for {observable_pct}% {method}; got {len(entries)}"
                 )
             for channel in CHANNELS:
                 values = np.asarray([
@@ -405,7 +405,7 @@ def main() -> None:
                 atomic_json(args.output, report)
                 failures = [item for item in report["source_parity"] if not item["pass"]]
                 if failures and not args.allow_source_parity_failure:
-                    raise RuntimeError(f"free-field random-observation source parity failed: {failures[:3]}")
+                    raise RuntimeError(f"Free-field random-observation differences exceeded tolerance: {failures[:3]}")
             del model
             torch.cuda.empty_cache()
     finally:

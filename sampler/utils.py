@@ -295,10 +295,7 @@ class LangevinCorrectorMM(Corrector):
 
 
 class AnnealedLangevinDynamics(Corrector):
-    """The original annealed Langevin dynamics predictor in NCSN/NCSNv2.
-
-  We include this corrector only for completeness. It was not directly used in our paper.
-  """
+    """Annealed Langevin dynamics corrector from NCSN/NCSNv2."""
 
     def __init__(self, sde, net_fn, snr, n_steps):
         super().__init__(sde, net_fn, snr, n_steps)
@@ -1295,7 +1292,7 @@ def generate_parallel_2d_vesde_ddim(config, net, sde, y, transform, corrector, n
                 x0_hat = inp + (sigma_current ** 2) * score
 
                 ################################################
-                # 关键修复：精确处理时间步参数
+                # Broadcast the time parameter over the batch.
                 ################################################
 
                 # 创建用于计算下一个时间步sigma的适当形状输入
@@ -1473,7 +1470,6 @@ def generate_parallel_2d_vesde_ddim_ad(config, net, sde, y, transform, corrector
             sample[:, i_inv * (nf - ol):i_inv * (nf - ol) + nf, ncomp:] = xx[:, i_inv, :, ncomp:]
         return sample
 
-    # ===================== 修改开始 =====================
     # 创建自适应时间步序列 - 在高方差区稀疏，低方差区密集
     # 提取出sde.T和sde.eps作为常量，避免函数传递
     T_max = sde.T
@@ -1481,7 +1477,7 @@ def generate_parallel_2d_vesde_ddim_ad(config, net, sde, y, transform, corrector
 
     def adaptive_cosine_timesteps(steps, T, eps=1e-12, offset=0.008):
         """
-        修正的时间步函数 - 确保所有时间步在[T, eps]范围内
+        Cosine-spaced decreasing diffusion times from T to eps.
         """
         # 1. 生成基础序列
         s = torch.linspace(0, 1, steps + 1, device=device)
@@ -1490,7 +1486,7 @@ def generate_parallel_2d_vesde_ddim_ad(config, net, sde, y, transform, corrector
         alpha_bar = torch.cos((s + offset) / (1 + offset) * torch.pi * 0.5) ** 2
 
         # 3. 直接映射到时间范围 [T, eps]
-        # 因为alpha_bar从1递减到0，我们直接映射到[T, eps]
+        # Map alpha_bar to the diffusion-time interval.
         adaptive_t = T * alpha_bar + eps * (1 - alpha_bar)
 
         # 4. 确保严格递减
@@ -1502,10 +1498,9 @@ def generate_parallel_2d_vesde_ddim_ad(config, net, sde, y, transform, corrector
 
         return adaptive_t
 
-    # 使用更稳健的自适应时间步
+    # Generate the cosine time grid.
     timesteps = adaptive_cosine_timesteps(ds, T_max, eps_min, 0.008)
     eps_t = torch.tensor(eps_min, device=device).float()
-    # ===================== 修改结束 =====================
     #print(timesteps)
     # 初始化：从先验分布采样
     x_unknown = sde.prior_sampling(shape).to(device).float()
@@ -1567,7 +1562,7 @@ def generate_parallel_2d_vesde_ddim_ad(config, net, sde, y, transform, corrector
                 x0_hat = inp + (sigma_current ** 2) * score
 
                 ################################################
-                # 关键修复：精确处理时间步参数
+                # Broadcast the time parameter over the batch.
                 ################################################
 
                 # 创建用于计算下一个时间步sigma的适当形状输入
@@ -3914,9 +3909,8 @@ def calculate_physics_residual_loss_1d(data, c=343.0, rho0=1.21, dt=2e-4, dx=1/2
     dv_dx = (v[:, :, 1:] - v[:, :, :-1]) / dx
 
     # --- 2. 对齐维度 ---
-    # 为了让 dt 和 dx 的张量形状匹配，我们需要取交集部分
+    # Align temporal and spatial differences on their common interior.
     # dp_dt 缺少最后一帧，dp_dx 缺少最后一个空间点
-    # 我们统一截取到 [:, 0:-1, 0:-1] 的范围 (或者根据具体差分格式调整，这里采用最简对齐)
 
     # 对齐时间项 (去掉最后一个空间点)
     dp_dt_c = dp_dt[:, :, :-1]
@@ -4038,7 +4032,7 @@ def calculate_physics_residual_loss_1d_3(data, c=343.0, rho0=1.21, dt=1e-5, dx=0
     p = data[:, :, 0:1, :] # [B, T, 1, H]
     v = data[:, :, 1:2, :] # [B, T, 1, H]
 
-    # 定义损失函数：Huber Loss 对异常值更鲁棒，防止梯度爆炸
+    # Smooth L1 loss gives a linear penalty for large residuals.
     criterion = torch.nn.SmoothL1Loss() if use_huber else torch.nn.MSELoss()
 
     # ==========================================
@@ -4080,7 +4074,7 @@ def calculate_physics_residual_loss_1d_3(data, c=343.0, rho0=1.21, dt=1e-5, dx=0
     loss_euler = criterion(res_euler, torch.zeros_like(res_euler))
 
     # ==========================================
-    # 4. [新增] 硬声场边界 (Rigid Wall BC)
+    # 4. Rigid-wall boundary loss
     # 位置: 最右端 (index -1)
     # 条件: 振速 v = 0
     # ==========================================
@@ -4097,7 +4091,7 @@ def calculate_physics_residual_loss_1d_3(data, c=343.0, rho0=1.21, dt=1e-5, dx=0
 
 def calculate_physics_residual_loss_1d_4(data, c=343.0, rho0=1.21, dt=2e-4, dx=1/21, smooth=True):
     """
-    计算一维声学方程残差 (带平滑预处理 - 修正版)
+    Compute one-dimensional acoustic residuals with optional smoothing.
     data: [Batch, Time, Channels, Space]
     """
     # 确保有足够的时间步和空间点
@@ -4107,16 +4101,13 @@ def calculate_physics_residual_loss_1d_4(data, c=343.0, rho0=1.21, dt=2e-4, dx=1
                torch.tensor(0.0, device=data.device)
 
     # -------------------------------------------------------
-    # 0. 平滑预处理 (关键步骤!)
+    # 0. Spatial smoothing
     # -------------------------------------------------------
     if smooth:
         # 定义一个简单的 1D 高斯核 [1, 2, 1] / 4
         # F.conv1d 的权重形状要求: (Out_channels, In_channels, Kernel_size)
-        # 这里我们需要 (1, 1, 3)
+        # Kernel shape: (1, 1, 3).
         kernel = torch.tensor([[[1., 2., 1.]]], device=data.device) / 4.0
-
-        # 【修正】：不要在这里执行 unsqueeze(1)，上面定义的时候已经是 3维 [1,1,3] 了
-        # kernel = kernel.unsqueeze(1)  <-- 删掉这行
 
         # 对 Time 维度进行 reshape 以便对 Space 维度做卷积
         # data: [B, T, C, H]
@@ -4135,7 +4126,7 @@ def calculate_physics_residual_loss_1d_4(data, c=343.0, rho0=1.21, dt=2e-4, dx=1
         p = data[:, :, 0:1, :]
         v = data[:, :, 1:2, :]
 
-    # 定义损失函数 (使用 Huber Loss 防止梯度爆炸)
+    # Apply Smooth L1 loss.
     criterion = torch.nn.SmoothL1Loss()
 
     # -------------------------------------------------------
@@ -4194,7 +4185,7 @@ def calculate_physics_residual_loss_1d_full(data, c=343.0, rho0=1.21, dt=1e-5, d
 
     criterion = torch.nn.SmoothL1Loss() if use_huber else torch.nn.MSELoss()
 
-    # 🚨 物理学常数：空气特性阻抗
+    # Characteristic acoustic impedance.
     Z0 = rho0 * c
 
     # ==========================================
@@ -4206,7 +4197,7 @@ def calculate_physics_residual_loss_1d_full(data, c=343.0, rho0=1.21, dt=1e-5, d
 
     res_wave_all = (1.0 / (c**2)) * d2psi_dt2 - d2psi_dx2
 
-    # 🚨 1：将 Vx, Vy, Vz 的残差乘以 Z0，使其与 P 的残差处于同一量级 (O(1))
+    # Scale velocity wave-equation residuals by acoustic impedance.
     weight_wave = torch.tensor([1.0, Z0, Z0, Z0], device=data.device, dtype=data.dtype).view(1, 1, 4, 1)
     res_wave_all = res_wave_all * weight_wave
 
@@ -4226,10 +4217,10 @@ def calculate_physics_residual_loss_1d_full(data, c=343.0, rho0=1.21, dt=1e-5, d
     vx_xm1 = vx[:, 1:-1, :, :-2]
     dvx_dx = (vx_xp1 - vx_xm1) / (2 * dx)
 
-    # 原残差量级为 dv/dx (极小，O(10^-4))
+    # Continuity residual in velocity-gradient units.
     res_cont = (1.0 / (rho0 * (c**2))) * dp_dt + dvx_dx
 
-    # 🚨 核心修复 2：将连续性残差乘以 Z0，拉拔到 O(1) 量级
+    # Scale the continuity residual by acoustic impedance.
     res_cont = res_cont * Z0
     loss_cont = criterion(res_cont, torch.zeros_like(res_cont))
 
@@ -4241,8 +4232,7 @@ def calculate_physics_residual_loss_1d_full(data, c=343.0, rho0=1.21, dt=1e-5, d
     p_xm1 = p[:, 1:-1, :, :-2]
     dp_dx = (p_xp1 - p_xm1) / (2 * dx)
 
-    # 原残差量级为 dv/dt (由于频率 omega 的存在，已在 O(1) 附近)
-    # 所以无需乘 Z0，天然与 P 处于相近量级
+    # Euler residual in acceleration units.
     res_euler = dvx_dt + (1.0 / rho0) * dp_dx
     loss_euler = criterion(res_euler, torch.zeros_like(res_euler))
 
@@ -4470,10 +4460,10 @@ def generate_parallel_1d_ISS_1dtube_res(config, net, sde, y, transform, correcto
 
                 # Consistency Loss
                 loss_consis = torch.sum(((x0_hat[:, :-1, (nf-ol):nf, :ncomp].detach()-x0_hat[:, 1:, :ol, :ncomp])**2).reshape(x0_hat.shape[0], x0_hat.shape[1]-1, -1), dim=-1)
-                loss_consis = torch.sum(loss_consis, dim=-1).mean() # Match Base
+                loss_consis = torch.sum(loss_consis, dim=-1).mean()
 
                 loss_consis_para = torch.sum(((x0_hat[:, :-1, (nf-ol):nf, ncomp:]-x0_hat[:, 1:, :ol, ncomp:].detach())**2).reshape(x0_hat.shape[0], -1), dim=-1)
-                loss_consis_para = torch.sum(loss_consis_para, dim=-1).mean() # Match Base
+                loss_consis_para = torch.sum(loss_consis_para, dim=-1).mean()
 
                 reg_loss = 1 * compute_regularization(x0_hat_temp, reg_coef_pa)
 
@@ -4519,7 +4509,7 @@ def generate_parallel_1d_ISS_1dtube_res(config, net, sde, y, transform, correcto
                 loss_euler = torch.tensor(0.0)
                 loss_bc = torch.tensor(0.0) # 补齐占位
 
-                # 🚨 物理触发条件：彻底剔除 reg_coef_bc
+                # Enable the wave, continuity and Euler residual terms.
                 run_physics = (reg_coef_wave > 0 or reg_coef_cont > 0 or reg_coef_euler > 0)
 
                 if (ds - i) <= physics_start_step and run_physics:
@@ -4535,7 +4525,7 @@ def generate_parallel_1d_ISS_1dtube_res(config, net, sde, y, transform, correcto
                                 dx=physics_dx
                             )
 
-                            # 组合最终 Physics Loss (绝对不加 bc)
+                            # Combine the three weighted residual losses.
                             loss_phy = (reg_coef_wave * loss_wave +
                                         reg_coef_cont * loss_cont +
                                         reg_coef_euler * loss_euler)
@@ -4601,14 +4591,13 @@ def generate_parallel_1d_ISS_1dtube_res(config, net, sde, y, transform, correcto
 
 def calculate_physics_residual_loss_1d_p(data, c=343.0, rho0=1.21, dt=2e-4, dx=1/21, use_huber=True):
     """
-    计算一维声学方程残差 (仅声压波动方程)
-    修改说明：由于模型没有振速输出，移除了连续性方程、动量方程和速度边界损失。
+    Compute the one-dimensional wave-equation residual for pressure.
     """
     # 确保有足够的时间步和空间点
     if data.shape[1] < 3 or data.shape[3] < 3:
         return torch.tensor(0.0, device=data.device)
 
-    # 修改：只取第0个通道 (声压 p), [B, T, 1, H]
+    # Pressure is channel 0: [B, T, 1, H].
     # 注意：这里假设 data 的 shape 是 [B, T, C, H]，且 C=1
     p = data[:, :, 0:1, :]
 
@@ -4629,7 +4618,6 @@ def calculate_physics_residual_loss_1d_p(data, c=343.0, rho0=1.21, dt=2e-4, dx=1
     res_wave = (1.0 / (c**2)) * d2p_dt2 - d2p_dx2
     loss_wave = criterion(res_wave, torch.zeros_like(res_wave))
 
-    # 修改：只返回波动方程损失
     return loss_wave
 
 def s3gm_sample_1d_ISS_1dtube_res_p(config, net, sde, y, transform, corrector, n_steps=5, alpha=1., beta=0.4, gamma=0.5, snr=0.128, std_y=None,
@@ -4643,8 +4631,7 @@ def s3gm_sample_1d_ISS_1dtube_res_p(config, net, sde, y, transform, corrector, n
                                 # --- 物理参数 ---
                                 physics_start_step=20,
                                 reg_coef_wave=0.1,
-                                # reg_coef_cont, reg_coef_euler, reg_coef_bc 已移除或不再使用
-                                normalized_velocity_zero = None, # 实际上不再起作用，但保留参数位置防止报错
+                                normalized_velocity_zero = None, # Accepted for call compatibility; unused for pressure-only fields.
                                 physics_c=343.0,
                                 physics_rho0=1.21,
                                 physics_dt=1e-4,
@@ -4661,7 +4648,7 @@ def s3gm_sample_1d_ISS_1dtube_res_p(config, net, sde, y, transform, corrector, n
                                                       data_scalar=data_scalar,
                                                       physics_start_step=physics_start_step,
                                                       reg_coef_wave=reg_coef_wave,
-                                                      # 下面这些参数虽然传入但内部逻辑已移除
+                                                      # Pass the pressure-only sampler arguments.
                                                       normalized_velocity_zero=normalized_velocity_zero,
                                                       physics_c=physics_c,
                                                       physics_rho0=physics_rho0,
@@ -4697,7 +4684,7 @@ def generate_parallel_1d_ISS_1dtube_res_p(config, net, sde, y, transform, correc
                               data_scalar=None,
                               physics_start_step=20,
                               reg_coef_wave=0.1,
-                              # 移除不需要的物理系数参数，或者保留但不用
+                              # Pressure-only physical parameters.
                               reg_coef_cont=0.0,
                               reg_coef_euler=0.0,
                               reg_coef_bc = 0.0,
@@ -4761,7 +4748,6 @@ def generate_parallel_1d_ISS_1dtube_res_p(config, net, sde, y, transform, correc
 
     momentum = torch.zeros(x.size(0), x.size(2), x.size(3), x.size(4), device=x.device)
 
-    # 修改：移除了 loss_cont, loss_euler
     losses = dict(loss=[], loss_dps=[], loss_eq=[], loss_consis=[], loss_consis_para=[], reg_loss=[],
                   loss_phy=[], loss_wave=[])
 
@@ -4841,10 +4827,10 @@ def generate_parallel_1d_ISS_1dtube_res_p(config, net, sde, y, transform, correc
 
                 # Consistency Loss
                 loss_consis = torch.sum(((x0_hat[:, :-1, (nf-ol):nf, :ncomp].detach()-x0_hat[:, 1:, :ol, :ncomp])**2).reshape(x0_hat.shape[0], x0_hat.shape[1]-1, -1), dim=-1)
-                loss_consis = torch.sum(loss_consis, dim=-1).mean() # Match Base
+                loss_consis = torch.sum(loss_consis, dim=-1).mean()
 
                 loss_consis_para = torch.sum(((x0_hat[:, :-1, (nf-ol):nf, ncomp:]-x0_hat[:, 1:, :ol, ncomp:].detach())**2).reshape(x0_hat.shape[0], -1), dim=-1)
-                loss_consis_para = torch.sum(loss_consis_para, dim=-1).mean() # Match Base
+                loss_consis_para = torch.sum(loss_consis_para, dim=-1).mean()
 
                 reg_loss = 1 * compute_regularization(x0_hat_temp, reg_coef_pa)
 
@@ -4852,18 +4838,17 @@ def generate_parallel_1d_ISS_1dtube_res_p(config, net, sde, y, transform, correc
                 loss_phy = torch.tensor(0.0, device=x0_hat_temp.device)
                 loss_wave = torch.tensor(0.0)
 
-                # 修改：只判断 wave 的系数，移除了 cont, euler, bc 的判断
+                # Enable the pressure wave-equation residual.
                 run_physics = (reg_coef_wave > 0)
 
                 if (ds - i) <= physics_start_step and run_physics:
                     if data_scalar is not None:
-                        # 修改：将 ncomp >= 2 改为 ncomp >= 1，允许单通道物理计算
+                        # Pressure-only residuals require at least one channel.
                         if ncomp >= 1:
                             x0_hat_unnorm = x0_hat_temp.clone()
                             # 仅反归一化存在的通道
                             x0_hat_unnorm[:, :, :ncomp] = data_scalar(x0_hat_temp[:, :, :ncomp])
 
-                            # 修改：只接收 wave loss
                             loss_wave = calculate_physics_residual_loss_1d_p(
                                 x0_hat_unnorm,
                                 c=physics_c,
@@ -4903,10 +4888,6 @@ def generate_parallel_1d_ISS_1dtube_res_p(config, net, sde, y, transform, correc
 
                 temp = temp_u - dx
 
-            # === 修改：移除了针对振速通道的硬约束 (Hard BC) ===
-            # 因为只有声压通道，没有通道1，这里必须删除
-            # if normalized_velocity_zero is not None:
-            #     temp[:, :, 1, -1] = normalized_velocity_zero
 
             temp = temp.detach()
 
@@ -4915,9 +4896,6 @@ def generate_parallel_1d_ISS_1dtube_res_p(config, net, sde, y, transform, correc
 
             x_mean_temp = temp_u if i < sde_start_step else temp_mean
 
-            # === 修改：移除了针对振速通道的硬约束 ===
-            # if normalized_velocity_zero is not None:
-            #     x_mean_temp[:, :, 1, -1] = normalized_velocity_zero
 
             x_mean = rearrange(x_mean_temp, '(b n) t c h -> b n t c h', n=b)
 
@@ -5228,7 +5206,6 @@ def generate_parallel_2d_ISS_kol_martingale(config, net, sde, y, transform, corr
                           save_sample_path=False, probability_flow=False,
                           continuous=True, data_scalar=None):
 
-    # --- 保持原有初始化逻辑完全不变 ---
     dtype_torch = getattr(torch, dtype)
 
     corrector_update_fn = functools.partial(shared_corrector_update_fn,
@@ -5250,7 +5227,7 @@ def generate_parallel_2d_ISS_kol_martingale(config, net, sde, y, transform, corr
     ns_real = b * (nf - ol) + ol
     nc = config.num_conditions
     ds = denoising_steps
-    reg_coef_pa = reg_coef_pa # 确保这行和你的一致
+    reg_coef_pa = reg_coef_pa
 
     shape = [len(y), b, nf, ncomp + nc, config.image_size, config.image_size]
 
@@ -5267,7 +5244,6 @@ def generate_parallel_2d_ISS_kol_martingale(config, net, sde, y, transform, corr
     T_max = sde.T
     eps_min = eps
 
-    # 你的代码里直接用的 linspace
     timesteps = torch.linspace(sde.T, eps, sde.N + 1, device=device).float()
     eps_t = torch.tensor(eps_min, device=device).float()
 
@@ -5321,7 +5297,7 @@ def generate_parallel_2d_ISS_kol_martingale(config, net, sde, y, transform, corr
                     diff = torch.norm(x0_hat.detach() - last_x0_hat.detach(), p=2, dim=(1,2,3,4))
                     martingale_diffs.append(diff.mean().item())
                 else:
-                    # 第一步没有上一步，填 0 或者跳过，为了绘图方便可以填 0
+                    # Initialize the first adjacent-estimate difference to zero.
                     martingale_diffs.append(0.0)
 
                 last_x0_hat = x0_hat.detach().clone()
@@ -5344,7 +5320,6 @@ def generate_parallel_2d_ISS_kol_martingale(config, net, sde, y, transform, corr
                 else:
                     with torch.no_grad():
                         f, G_val = sde.discretize(inp, vec_t)
-                        # 注意：这里严格保留你的 * 1.0 和 detach
                         rev_f = f - G_val[:, None, None, None, None] ** 2 * score.detach() * 1.0
 
                         temp_mean = inp - rev_f
@@ -5395,7 +5370,6 @@ def generate_parallel_2d_ISS_kol_martingale(config, net, sde, y, transform, corr
 
             x_pred = x_pred.detach()
             x = rearrange(x_pred, '(b n) t c h w -> b n t c h w', n=b)
-            # 注意：这里的逻辑也严格保留
             x_mean = rearrange(x_pred if i < sde_start_step else temp_mean,
                                '(b n) t c h w -> b n t c h w', n=b)
 
@@ -5405,7 +5379,7 @@ def generate_parallel_2d_ISS_kol_martingale(config, net, sde, y, transform, corr
             tqdm_setting.update(1)
 
 
-    # 直接返回列表 martingale_diffs，而不是均值 --->
+    # Return the per-step martingale-divergence sequence.
     return x_to_sample(x_mean).detach().cpu().numpy(), \
            (x_generated if save_sample_path else None), \
            losses, martingale_diffs
@@ -5507,7 +5481,7 @@ def s3gm_sample_1d_line_array_puvw(config, net, sde, y, transform, corrector, n_
                               physics_rho0=1.21,
                               physics_dt=2e-4,
                               physics_dx=1/21,
-                              # 新增 T_prime 参数以兼容调用
+                              # Accept T_prime as an alternative sequence-length argument.
                               T_prime_y=None, T_prime=None
                               ):
 

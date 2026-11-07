@@ -7,7 +7,7 @@ from torch.utils.data import DataLoader, TensorDataset
 from timeit import default_timer
 import time
 
-# 确保 PyTorch 能够充分利用硬件
+# Enable cuDNN algorithm selection for fixed input shapes.
 torch.backends.cudnn.benchmark = True
 
 # --- 导入 FNO 模型 (假设 fno.py 在 models 目录下) ---
@@ -30,7 +30,7 @@ class Config:
     STEP_SIZE = 100
     GAMMA = 0.5
 
-    # 3. FNO 模型参数 (保持与论文一致)
+    # 3. FNO model parameters
     MODES = 16
     WIDTH = 64
     SEQUENCE_LENGTH = 10
@@ -117,7 +117,7 @@ class UnitGaussianNormalizer(object):
         self.eps = eps
 
         # 1. 临时变形以分离物理通道: (N, H, W, Seq_Len, Channels)
-        # 我们需要在除了最后一个维度(Channels)以外的所有维度上计算均值和方差
+        # Compute channel statistics over samples, time and space.
         B, H, W, TC = x.shape
         x_reshaped = x.view(B, H, W, -1, num_channels)
 
@@ -168,7 +168,7 @@ def train_and_evaluate(input_res, batch_size, config, x_train, x_test, device_id
     else:
         device = 'cpu'
 
-    # FIX: 确保标签使用 input_res (2, 3, 4, 5, 6) 作为下采样因子
+    # Use the downsampling factor in checkpoint filenames.
     downsample_factor_label = input_res
 
     print(f"\n--- Starting Experiment: {downsample_factor_label}x Downsampling (INPUT_RES={input_res}) [Batch={batch_size}] on DEVICE: {device} ---")
@@ -291,7 +291,7 @@ def train_and_evaluate(input_res, batch_size, config, x_train, x_test, device_id
     save_path = os.path.join(config.SAVE_DIR, f'{config.FILE_PREFIX}_reconstruction_{downsample_factor_label}x.pth')
 
     torch.save(model.state_dict(), save_path)
-    print(f"✅ [GPU {device_id} | {downsample_factor_label}x | B={batch_size}] Model saved successfully to: {save_path}")
+    print(f"[GPU {device_id} | {downsample_factor_label}x | B={batch_size}] Model saved to: {save_path}")
 
 def main():
     run(Config, load_data_file, train_and_evaluate, model="fno",

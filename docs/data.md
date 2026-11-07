@@ -1,7 +1,7 @@
 # Data and model files
 
-The current data and model release is [Zenodo 23938017](https://doi.org/10.5281/zenodo.23938017).
-It contains the complete data and model packages for the repository examples.
+Data and model checkpoints for the examples are available at
+[Zenodo 23938017](https://doi.org/10.5281/zenodo.23938017).
 
 | Archive | Size (GB) |
 | --- | ---: |
@@ -29,7 +29,7 @@ Download the relevant archives and extract them into the repository root. The
 archives create `data/`, `results/<model>/` and the FNO/LNO result directories.
 Every model package includes its configuration and normalization statistics.
 Every data package includes an English description of array dimensions,
-variables and processing. The numerical data in the archives are unchanged.
+variables and processing.
 
 `acoustic_free_field.npy` is the free-field **training** array. Place it at
 `data/anechoic_high_prec_dataset_last700_2.npy`. The separate test array is
@@ -49,7 +49,7 @@ supplied in `data_free_field_test.zip`.
 | Measured line array | `results/line_array_v33` | `checkpoint_600.pth` |
 | Simulated line array | `results/line_array_v3` | `checkpoint.pth` |
 
-The model packages follow the retained figure-generating notebooks. The
+The case notebooks use the checkpoints listed above. The
 Kolmogorov package includes both training stages for the regularization
 comparison. The FNO/LNO package contains separate 2×, 3×, 4×, 5× and 6× models
 for each operator and each of the free-field and Kolmogorov cases.
@@ -63,9 +63,9 @@ notebook. ERA5 arrays have already been normalized; `scalars_era5.npy` supplies
 the inverse transformation to physical variables. Keep the observation masks,
 frequency selection and normalization order given by each case notebook.
 
-The small CSV files under `source_data/` contain the recorded free-field
-observation-rate and regular-downsampling results. The plotting notebook
-contains their aggregation and upper-tail filtering steps.
+The CSV files under `source_data/` contain the free-field observation-rate and
+regular-downsampling results. [Figure statistics](cases.md#figure-statistics)
+describes their aggregation and filtering.
 
 ERA5 is supplied by ECMWF through the Copernicus Climate Change Service. The
 processed subset uses eastward wind, northward wind, temperature and pressure.

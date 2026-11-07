@@ -1,12 +1,10 @@
 # FNO and LNO training
 
-These four files retain the original training loops, model widths, Fourier/Laplace
-modes, interpolation, optimizer and learning-rate schedule. The command line
-selects the dataset, downsampling factors, device and a new output directory.
+The command line selects the dataset, downsampling factors, device and output directory.
 Each selected factor trains its own model. Runs are sequential on the chosen
 device; `--batch-size` can reduce memory use.
 
-| Script | Input scaling | Original batch size |
+| Script | Input scaling | Default batch size |
 | --- | --- | --- |
 | `train_FNO_23456.py` | Raw field values | 350 at 2x/6x, 768 at 3x--5x |
 | `train_LNO_23456.py` | Raw field values | 128 at 2x/6x, 256 at 3x--5x |
@@ -37,7 +35,7 @@ the published paths. The output folder must be new. Released checkpoints stay
 under `results_FNO*`/`results_LNO*`; new runs write under `outputs/`.
 
 The free-field comparison uses the channel-normalized models and their saved
-normalization parameters. The original Kolmogorov training files use raw
+normalization parameters. The Kolmogorov training scripts use raw
 velocity values. The paper evaluation notebook applies the score-model
 `scalar.npy` before baseline inference. The released Kolmogorov
-weights and the evaluation notebook specify the reported comparison. The training scripts preserve the original preprocessing.
+weights and the evaluation notebook specify the reported comparison.

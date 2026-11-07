@@ -11,7 +11,7 @@ tubes, a measured virtual array, Kolmogorov flow and ERA5 weather fields.
 - [Case settings and notebook instructions](docs/cases.md)
 - [Data files and model packages](docs/data.md)
 - [Training and sampling commands](docs/running.md)
-- [Checks performed for this release](docs/validation.md)
+- [Tests and reference results](docs/validation.md)
 
 ## Installation
 
@@ -36,8 +36,8 @@ notebooks under `notebooks/` include measured standing-wave and virtual-array
 experiments. Their first cell selects the repository root and device. Each
 notebook can be run in its own fresh kernel.
 
-The command-line free-field evaluator reproduces the recorded random-observation
-and regular-downsampling settings. For one regular-downsampling case:
+The free-field evaluators support random observations and regular spatial
+downsampling. For one regular-downsampling case:
 
 ```bash
 python scripts/evaluate_freefield_manuscript_protocol.py \
@@ -74,14 +74,10 @@ python train_FT.py --config results/2DSound_v22/config.json \
 ```
 
 `--total-steps` counts optimizer updates. Reverse sampling steps are configured
-separately in the sampling commands and notebooks. These commands demonstrate
-the two training stages; case configurations and selected paper checkpoints
-are supplied in the model packages. Fine-tuning writes to a new output directory.
+separately in the sampling commands and notebooks. Case configurations and
+the checkpoints used for evaluation are supplied in the model packages.
+Fine-tuning writes to a new output directory.
 Use `--resume` with the same output directory to continue a saved training run.
-
-Model loading checks parameter names and shapes, including `DataParallel`
-prefixes and exponential moving-average (EMA) parameters. A missing or
-incompatible checkpoint raises an error before inference.
 
 ## Tests
 
@@ -94,7 +90,7 @@ residual, gradient propagation and deterministic training continuation.
 
 ## Citation
 
-The citation below identifies the currently available arXiv version:
+arXiv preprint:
 
 ```bibtex
 @article{zhu2026physicsinformed,

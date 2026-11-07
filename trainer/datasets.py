@@ -116,7 +116,7 @@ class Datasetline_array(Dataset):
         max_time = self.num_t - self.num_frames * self.num_interval
         i_t = np.random.choice(max_time, 1)[0]
         
-        # 核心切片逻辑 (Slicing)，替代 np.arange
+        # Slice the selected frames.
         # Shape: [Frames, Space, Channel]
         x = self.data[i_b, i_t : i_t + self.num_frames * self.num_interval : self.num_interval, :]
         
@@ -200,7 +200,7 @@ class Dataset1DTube_p(Dataset):
     def __len__(self):
         return self.length
 
-    # 兼容原有的获取归一化参数的方法，返回 mean 和 std
+    # Return normalization statistics.
     def get_data_scalar(self):
         """返回 (mean, std) 的标量值（此处为统一归一化后的标量）。"""
         # 由于是统一归一化，直接返回标量
@@ -298,7 +298,7 @@ class Dataset2DSound_P_Vx_Vy(Dataset):
         max_time_idx = self.num_t - (self.num_frames - 1) * self.num_interval - 1
         i_t = np.random.choice(max_time_idx, 1)[0]
 
-        # 你的数据 H=64, W=64，若全图训练则起始点为 0
+        # Full-grid crops start at zero on the 64 by 64 grid.
         i_w = np.random.choice(self.num_w - self.num_w + 1, 1)[0]
         i_h = np.random.choice(self.num_h - self.num_h + 1, 1)[0]
 
@@ -736,7 +736,7 @@ class Dataset1DTube(Dataset):
 
 class Dataset1DTube_Channel_Wise_Normalization(Dataset):
     """
-    修改版：支持按通道独立归一化 (Channel-wise Normalization)
+    Channel-wise normalization of one-dimensional fields.
     """
     def __init__(self, data, labels, length, num_frames, num_interval, 
                  is_scalar=True, dtype='float32', is_condition=True):
@@ -754,9 +754,7 @@ class Dataset1DTube_Channel_Wise_Normalization(Dataset):
         assert len(data) == len(labels), \
             f"Data ({len(data)}) and Labels ({len(labels)}) length mismatch!"
 
-        # --- 修改重点开始 ---
         # 需要在除了 Channel 以外的所有维度上求均值和标准差
-        # data shape: (B, T, H, C) -> 我们要保留 C 维度
         # axis=(0, 1, 2) 表示对 Batch, Time, Space 求聚合，只留下 Channel 的统计量
         
         if is_scalar:
@@ -771,15 +769,14 @@ class Dataset1DTube_Channel_Wise_Normalization(Dataset):
 
             self.data = (data - self.mean) / self.std
         else:
-            # 如果不是 scalar 模式，通常也建议保留统计量以便反归一化
+            # Identity statistics for unscaled data.
             self.mean = np.zeros((1, 1, 1, self.num_c))
             self.std = np.ones((1, 1, 1, self.num_c))
             self.data = data
-        # --- 修改重点结束 ---
 
 
         print("-" * 30)
-        print("DEBUG CHECK: Data Statistics")
+        print("Normalization statistics")
         print(f"Mean shape: {self.mean.shape}") # 应该看到 Channel 维度，例如 (1,1,1,2)
         print(f"Std shape:  {self.std.shape}")
 
@@ -791,9 +788,9 @@ class Dataset1DTube_Channel_Wise_Normalization(Dataset):
         print(f"Channel 1 (Velocity) Std: {v_std:.6f}")
 
         if abs(p_std - v_std) < 1e-4:
-            print("!!! 警告：两个通道的标准差几乎一样，你可能还在用统一归一化！")
+            print("Pressure and velocity standard deviations differ by less than 1e-4.")
         else:
-            print(">>> 成功：检测到通道独立归一化，振速 Std 应该很小。")
+            print("Pressure and velocity standard deviations differ by at least 1e-4.")
         print("-" * 30)
 
 
@@ -855,7 +852,7 @@ class DataScalar:
         # 调整维度以适配 [Batch, Time, Channel, Space]
         # Dataset 中 mean 是 [1, 1, 1, C] -> 对应 data [B, T, H, C]
         # 但是网络输出通常是 [Batch, Time, Channel, Space]
-        # 所以我们需要把 mean/std 变为 [1, 1, C, 1]
+        # Broadcast statistics as [1, 1, C, 1].
         self.mean = self.mean.permute(0, 1, 3, 2)
         self.std = self.std.permute(0, 1, 3, 2)
 

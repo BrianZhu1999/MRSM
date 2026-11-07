@@ -410,7 +410,7 @@ def main() -> None:
     else:
         report = {
             "protocol": {
-                "source_notebook": str(SOURCE_ROOT / "2d_sound_Error_evaluation.ipynb"),
+                "source_notebook": str(SOURCE_ROOT / "notebooks/free_field/downsampling.ipynb"),
                 "source_csv": str(EXPECTED_CSV),
                 "frequency_index": FREQUENCY_INDEX,
                 "frequency_hz": FREQUENCY_HZ,

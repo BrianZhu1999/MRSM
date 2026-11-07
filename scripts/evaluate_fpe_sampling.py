@@ -63,7 +63,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--config", type=Path, required=True)
     parser.add_argument(
         "--checkpoint", action="append", required=True, metavar="NAME=PATH",
-        help="repeat to compare checkpoints under exactly paired trials",
+        help="repeat to compare checkpoints using paired inputs and random seeds",
     )
     parser.add_argument("--device", default="cuda:0")
     parser.add_argument("--output-dir", type=Path, required=True)
@@ -74,8 +74,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--power-poll-seconds", type=float, default=0.25)
     parser.add_argument("--resume", action="store_true")
     parser.add_argument("--save-predictions", action="store_true")
-    parser.add_argument("--reverse-steps", type=int, default=None, help="smoke-test override only")
-    parser.add_argument("--max-trials", type=int, default=None, help="deterministic prefix for smoke tests")
+    parser.add_argument("--reverse-steps", type=int, default=None, help="override the number of reverse sampling steps")
+    parser.add_argument("--max-trials", type=int, default=None, help="evaluate the first N trials")
     parser.add_argument(
         "--temporal-microbatch-target", type=int, default=26,
         help="target frames per temporal microbatch for high-power 2D cases",
@@ -423,8 +423,8 @@ def tube_pressure_heldout_metrics(reference: np.ndarray,
             "mean_sensor_score": finite_or_none(np.nanmean(plotted_mean)),
             "shared_reference_range": shared_range,
             "note": (
-                "The retained plotting cell labels this score nRMSE, but computes mean "
-                "absolute error divided by one range shared across the six held-out sensors."
+                "The plotted score is mean absolute error divided by the reference range "
+                "shared across the six held-out sensors; the panel labels it nRMSE."
             ),
         },
     }
@@ -745,11 +745,10 @@ def evaluate_tube_pressure_heldout(args: argparse.Namespace, cfg: SimpleNamespac
                 "heldout_sensor_indices_one_based": (masked_indices + 1).tolist(),
                 "dense_reconstruction_nodes": 64,
                 "normalization_lineage": (
-                    "The retained notebook normalizes the measured data at load time, "
-                    "normalizes it again before sampling, applies one inverse transform "
-                    "to the prediction, and compares against the once-normalized reference."
+                    "The reference uses data normalized once. Sampling inputs are normalized twice, "
+                    "and one inverse transform is applied to predictions."
                 ),
-                "source_notebook": str(SOURCE_ROOT / "驻波管_p_遮蔽实验.ipynb"),
+                "source_script": str(SOURCE_ROOT / "scripts/evaluate_fpe_sampling.py"),
                 "source_checkpoint": str(
                     SOURCE_ROOT / "results/exp_p_v21/checkpoint.pth"
                 ),
@@ -843,7 +842,7 @@ def evaluate_tube(args: argparse.Namespace, cfg: SimpleNamespace, model: torch.n
             metrics["evaluation_scope"] = {
                 "paper_role": "Figure 4 cross-modal standing-wave-tube result",
                 "source_notebook": str(
-                    SOURCE_ROOT / "驻波管pu遮蔽实验_chan_nor.ipynb"
+                    SOURCE_ROOT / "notebooks/tube/pressure_velocity.ipynb"
                 ),
                 "data_path": str(data_path),
                 "excitation_frequency_hz": 385,
@@ -854,8 +853,8 @@ def evaluate_tube(args: argparse.Namespace, cfg: SimpleNamespace, model: torch.n
                 "dense_64_point_ground_truth_available": False,
                 "pi_iss_physics_residual_active": False,
                 "pi_iss_physics_note": (
-                    "The retained sampler's active physics branch requires at least four "
-                    "components; this two-component pressure/velocity configuration skips it."
+                    "Physics residuals are evaluated for configurations with at least four "
+                    "components. They are inactive for this two-component pressure/velocity case."
                 ),
             }
             trial_callback(method, trial, metrics, physical)
@@ -870,11 +869,9 @@ def evaluate_line_sim(args: argparse.Namespace, cfg: SimpleNamespace, model: tor
         test_ids = test_ids[:args.max_trials]
     methods = methods_for(args, ["pi-iss"])
     if methods != ["pi-iss"]:
-        raise ValueError("line-sim retained notebook protocol defines PI-ISS only")
-    # v33 was trained in impedance-matched network units (p, Z0*vx, Z0*vy,
-    # Z0*vz), without the v3 notebook's mean/std normalization.  Its retained
-    # executed notebook also uses 1000 frames, 500 reverse steps and 7/32
-    # regularly spaced sensors.
+        raise ValueError("line-sim supports the PI-ISS method")
+    # v33 uses impedance-matched inputs (p, Z0*vx, Z0*vy, Z0*vz),
+    # 1000 frames, 500 reverse steps and 7 of 32 regularly spaced sensors.
     impedance = 1.21 * 343.0
     inverse_scale = np.array(
         [1.0, 1 / impedance, 1 / impedance, 1 / impedance], dtype=np.float32
@@ -1056,7 +1053,7 @@ def evaluate_line_measured(args: argparse.Namespace, cfg: SimpleNamespace,
     net_fn = make_net_fn(model, cfg, device)
     methods = methods_for(args, ["pi-iss"])
     if methods != ["pi-iss"]:
-        raise ValueError("line-measured retained protocol defines PI-ISS only")
+        raise ValueError("line-measured supports the PI-ISS method")
     trial = {
         "measurement_file": str(data_path), "position": "pos5",
         "frequency_band_hz": [2900, 3000], "start": start,
@@ -1229,7 +1226,7 @@ def evaluate_era5(args: argparse.Namespace, cfg: SimpleNamespace, model: torch.n
                 "paper_nrmse": "normalized.per_channel.*.notebook_frame_mean_l2_nrmse",
                 "paper_pearson": "normalized.per_channel.*.notebook_frame_mean_pearson",
                 "mask_fixed_across_sampling_seeds": True,
-                "source_notebook": str(SOURCE_ROOT / "era5-RMSE.ipynb"),
+                "source_notebook": str(SOURCE_ROOT / "notebooks/era5/nrmse.ipynb"),
             }
             trial_callback(method, trial, metrics, physical_prediction)
 

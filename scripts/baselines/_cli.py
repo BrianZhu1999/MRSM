@@ -1,4 +1,4 @@
-"""Command-line paths and case settings for the original baseline trainers."""
+"""Command-line paths and case settings for the baseline trainers."""
 import argparse
 import json
 from pathlib import Path
@@ -28,7 +28,7 @@ def run(config_type, load_data, train, model, normalizer, batches):
     parser.add_argument("--scales", type=int, nargs="+", choices=range(2,7), default=[2,3,4,5,6])
     parser.add_argument("--device", default="cuda:0")
     parser.add_argument("--epochs", type=int, default=200)
-    parser.add_argument("--batch-size", type=int, help="override the original per-scale batch sizes")
+    parser.add_argument("--batch-size", type=int, help="override the per-scale batch sizes")
     parser.add_argument("--workers", type=int, default=8)
     parser.add_argument("--seed", type=int, default=42)
     args = parser.parse_args()

@@ -2,9 +2,9 @@
 
 Run these commands from the repository root after extracting the model and data
 packages described in [data.md](data.md). Replace `cuda:0` with the desired local
-GPU. The case notebooks give the recorded settings and visualization steps.
+GPU. The case notebooks give the sampling settings and plotting commands.
 
-## Recorded free-field comparisons
+## Free-field comparisons
 
 ```bash
 python scripts/evaluate_freefield_manuscript_protocol.py \
@@ -18,7 +18,7 @@ python scripts/evaluate_freefield_observation_curve_protocol.py \
 
 The regular grid uses 2–6× downsampling and five temporal starts. The random
 observation grid uses the six observation proportions in the paper. Both
-commands retain the recorded sampling seed and model mode. The CSVs under
+commands use the sampling seed and model mode specified in the notebooks. The CSVs under
 `source_data/` provide the numerical comparison values.
 
 ## Case sampling and paired checkpoint comparisons
@@ -43,8 +43,8 @@ python scripts/evaluate_fpe_sampling.py --case era5 \
 Repeat `--checkpoint name=path` to compare two models using paired inputs and
 random seeds. `--max-trials 1 --reverse-steps 2` selects a short implementation
 check; omit these overrides for the case evaluation. The measured-array
-comparison command fixes its noise seed; the figure notebook retains its own
-recorded input and noise procedure.
+comparison command fixes its noise seed. See [case settings](cases.md#sampling-and-metrics)
+for the figure notebook's noise and reference measurements.
 
 `--power-ceiling-w` sets a runtime GPU power threshold for the evaluation
 scripts. `--forward-sleep-seconds` in the multi-case evaluator and
@@ -59,6 +59,4 @@ Use `--help` for learning rate, batch size, regularization and continuation
 options. The data window is shared by the denoising and FPE losses, while their
 diffusion times and Gaussian perturbations are sampled independently.
 
-Model packages contain the checkpoints selected for the paper. A new training
-run has its own random initialization and optimizer trajectory; use the
-released checkpoint when reproducing a recorded figure.
+Use the checkpoints in the model packages to reproduce the reported figures.

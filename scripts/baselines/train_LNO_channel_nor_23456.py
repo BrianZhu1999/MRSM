@@ -7,7 +7,7 @@ from torch.utils.data import DataLoader, TensorDataset
 from timeit import default_timer
 import time
 
-# 确保 PyTorch 能够充分利用硬件
+# Enable cuDNN algorithm selection for fixed input shapes.
 torch.backends.cudnn.benchmark = True
 
 # --- 导入 LNO 模型 ---
@@ -31,7 +31,7 @@ class Config:
     STEP_SIZE = 100
     GAMMA = 0.5
 
-    # 3. LNO 模型参数 (根据要求修改)
+    # 3. LNO model parameters
     MODES = 16
     WIDTH = 8
     SEQUENCE_LENGTH = 10
@@ -69,7 +69,7 @@ class LpLoss(object):
         return diff_norms/y_norms
 
 # --- 辅助函数：生成网格 ---
-# LNO 内部实现了 get_grid，但在数据预处理阶段可能仍需保留此函数（尽管模型调用时不再从外部传入）
+# Coordinate grid for data preprocessing.
 def get_grid(shape, device):
     """ 生成 (x, y) 坐标网格 """
     batchsize, size_x, size_y = shape[0], shape[1], shape[2]
@@ -119,7 +119,7 @@ class UnitGaussianNormalizer(object):
         self.eps = eps
 
         # 1. 临时变形以分离物理通道: (N, H, W, Seq_Len, Channels)
-        # 我们需要在除了最后一个维度(Channels)以外的所有维度上计算均值和方差
+        # Compute channel statistics over samples, time and space.
         B, H, W, TC = x.shape
         x_reshaped = x.view(B, H, W, -1, num_channels)
 
@@ -179,7 +179,7 @@ def train_and_evaluate(input_res, batch_size, config, x_train, x_test, device_id
 
     # 2. 初始化 LNO 模型
     # LNO 需要 tx 和 ty 作为初始化参数 (用于 Pole-Residue 层)
-    # 我们根据输出分辨率 (64) 生成 0-1 的坐标
+    # Generate coordinates from 0 to 1 on the 64-point output grid.
     tx = torch.linspace(0, 1, config.OUTPUT_RES).unsqueeze(0).to(device) # Shape: (1, 64)
     ty = torch.linspace(0, 1, config.OUTPUT_RES).unsqueeze(0).to(device) # Shape: (1, 64)
 
@@ -227,7 +227,7 @@ def train_and_evaluate(input_res, batch_size, config, x_train, x_test, device_id
             x_input = x_input.reshape(B, config.SEQUENCE_LENGTH, config.NUM_CHANNELS, H, W).permute(0, 3, 4, 1, 2)
             x_input = x_input.reshape(B, H, W, config.SEQUENCE_LENGTH * config.NUM_CHANNELS)
 
-            # --- 修改：适配 LNO 输入格式 ---
+            # Arrange the LNO input dimensions.
             # LNO forward 期望输入为 (B, C, H, W)，且不需要外部 Grid
             x_input_lno = x_input.permute(0, 3, 1, 2) # (B, H, W, C) -> (B, C, H, W)
 
@@ -293,7 +293,7 @@ def train_and_evaluate(input_res, batch_size, config, x_train, x_test, device_id
     save_path = os.path.join(config.SAVE_DIR, f'{config.FILE_PREFIX}_reconstruction_{downsample_factor_label}x.pth')
 
     torch.save(model.state_dict(), save_path)
-    print(f"✅ [GPU {device_id} | {downsample_factor_label}x | B={batch_size}] Model saved successfully to: {save_path}")
+    print(f"[GPU {device_id} | {downsample_factor_label}x | B={batch_size}] Model saved to: {save_path}")
 
 def main():
     run(Config, load_data_file, train_and_evaluate, model="lno",
