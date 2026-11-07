@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Evaluate the Figure 2f free-field settings with supplemental metrics.
+"""Evaluate the free-field downsampling free-field settings with supplemental metrics.
 
 The calculation uses the source notebook's frequency, temporal windows,
 downsampling factors, sampler settings, random seed and frame-wise nRMSE.
@@ -74,7 +74,7 @@ def parse_args() -> argparse.Namespace:
         "--source-parity-tolerance",
         type=float,
         default=5e-4,
-        help="maximum absolute nRMSE difference from the Figure 2f CSV for checkpoint NAME=source",
+        help="maximum absolute nRMSE difference from the free-field downsampling CSV for checkpoint NAME=source",
     )
     parser.add_argument("--power-ceiling-w", type=float, default=250.0)
     parser.add_argument("--power-poll-seconds", type=float, default=0.25)
@@ -146,7 +146,7 @@ def load_model(
 
 def load_paper_references() -> dict[tuple[str, int, int], float]:
     if not EXPECTED_CSV.is_file():
-        raise FileNotFoundError(f"Figure 2f source CSV is missing: {EXPECTED_CSV}")
+        raise FileNotFoundError(f"free-field downsampling source CSV is missing: {EXPECTED_CSV}")
     references: dict[tuple[str, int, int], float] = {}
     with EXPECTED_CSV.open("r", encoding="utf-8", newline="") as handle:
         for row in csv.DictReader(handle):

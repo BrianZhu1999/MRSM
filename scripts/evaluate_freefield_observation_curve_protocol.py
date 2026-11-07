@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Reproduce the Figure 2c/e random-observation protocol and compare FPE checkpoints."""
+"""Reproduce the free-field random-observation random-observation protocol and compare FPE checkpoints."""
 
 from __future__ import annotations
 
@@ -79,7 +79,7 @@ def parse_args() -> argparse.Namespace:
 
 def load_paper_rows() -> dict[int, dict[str, str]]:
     if not SOURCE_CSV.is_file():
-        raise FileNotFoundError(f"Figure 2c/e source CSV is missing: {SOURCE_CSV}")
+        raise FileNotFoundError(f"free-field random-observation source CSV is missing: {SOURCE_CSV}")
     with SOURCE_CSV.open("r", encoding="utf-8", newline="") as handle:
         return {int(row["observable_pct"]): row for row in csv.DictReader(handle)}
 
@@ -405,7 +405,7 @@ def main() -> None:
                 atomic_json(args.output, report)
                 failures = [item for item in report["source_parity"] if not item["pass"]]
                 if failures and not args.allow_source_parity_failure:
-                    raise RuntimeError(f"Figure 2c/e source parity failed: {failures[:3]}")
+                    raise RuntimeError(f"free-field random-observation source parity failed: {failures[:3]}")
             del model
             torch.cuda.empty_cache()
     finally:
