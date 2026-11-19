@@ -1,0 +1,95 @@
+{
+  "title": "Figure 5 acoustic line-array conditions",
+  "dual_frequency_hz": [
+    [
+      2800,
+      2900
+    ],
+    [
+      2800,
+      3000
+    ],
+    [
+      2900,
+      3000
+    ]
+  ],
+  "source_configurations": [
+    {
+      "name": "A",
+      "y_m": 1.0,
+      "sources_xz_m": [
+        [
+          0.94,
+          0.57
+        ],
+        [
+          -0.98,
+          0.67
+        ]
+      ]
+    },
+    {
+      "name": "B",
+      "y_m": 1.0,
+      "sources_xz_m": [
+        [
+          0.94,
+          1.17
+        ],
+        [
+          -0.98,
+          0.67
+        ]
+      ]
+    },
+    {
+      "name": "C",
+      "y_m": 1.0,
+      "sources_xz_m": [
+        [
+          0.94,
+          1.17
+        ],
+        [
+          0.0,
+          1.27
+        ]
+      ]
+    },
+    {
+      "name": "D",
+      "y_m": 1.0,
+      "sources_xz_m": [
+        [
+          0.94,
+          0.57
+        ],
+        [
+          0.0,
+          1.27
+        ]
+      ]
+    }
+  ],
+  "localization_methods": [
+    "CBF",
+    "MUSIC",
+    "MVDR",
+    "SRP-PHAT"
+  ],
+  "localization_arrays": [
+    "sparse physical array",
+    "linear interpolation",
+    "cubic-spline interpolation",
+    "Helmholtz-ridge reconstruction",
+    "PI-ISS"
+  ],
+  "held_out_field_methods": [
+    "linear interpolation",
+    "cubic-spline interpolation",
+    "plane-wave ridge reconstruction",
+    "equivalent-source reconstruction",
+    "PI-ISS"
+  ]
+}
