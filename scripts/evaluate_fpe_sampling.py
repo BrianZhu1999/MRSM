@@ -23,7 +23,6 @@ from types import SimpleNamespace
 
 import numpy as np
 import torch
-from scipy.optimize import linear_sum_assignment
 from scipy.signal import hilbert
 
 
@@ -45,6 +44,7 @@ from sampler.utils import (  # noqa: E402
     s3gm_sample_2d_ISS_2dsound_res,
     s3gm_sample_2d_ISS_ERA5,
 )
+from scripts.line_array_metrics import match_source_positions  # noqa: E402
 
 
 ALLOWED_GPU_IDS = {0, 1, 2, 3}
@@ -1006,16 +1006,15 @@ def two_source_localization(x_grid: np.ndarray, z_grid: np.ndarray,
         if len(estimates) == 2:
             break
     estimates_array = np.asarray(estimates)
-    cost = np.linalg.norm(
-        true_positions[:, np.newaxis, :] - estimates_array[np.newaxis, :, :], axis=2
+    true_indices, estimate_indices, errors = match_source_positions(
+        true_positions, estimates_array
     )
-    true_indices, estimate_indices = linear_sum_assignment(cost)
-    errors = cost[true_indices, estimate_indices]
     return {
         "estimated_xz_m": estimates_array[estimate_indices].tolist(),
         "true_xz_m": true_positions[true_indices].tolist(),
         "per_source_error_m": errors.tolist(),
         "mean_localization_error_m": float(errors.mean()),
+        "localization_rmse_m": float(np.sqrt(np.mean(errors ** 2))),
         "max_localization_error_m": float(errors.max()),
     }
 

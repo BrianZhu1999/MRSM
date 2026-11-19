@@ -42,9 +42,10 @@ python scripts/evaluate_fpe_sampling.py --case era5 \
 
 Repeat `--checkpoint name=path` to compare two models using paired inputs and
 random seeds. `--max-trials 1 --reverse-steps 2` selects a short implementation
-check; omit these overrides for the case evaluation. The measured-array
-comparison command fixes its noise seed. See [case settings](cases.md#sampling-and-metrics)
-for the figure notebook's noise and reference measurements.
+check; omit these overrides for the case evaluation. The measured-array command
+runs the single-case 10 dB noise example. The Figure 5 frequency pairs and
+source configurations are listed in
+[`configs/figure5_line_array.json`](../configs/figure5_line_array.json).
 
 `--power-ceiling-w` sets a runtime GPU power threshold for the evaluation
 scripts. `--forward-sleep-seconds` in the multi-case evaluator and

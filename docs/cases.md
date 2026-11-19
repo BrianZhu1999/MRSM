@@ -42,7 +42,7 @@ For pressure-only tube reconstruction, `evaluate_fpe_sampling.py --case tube-pre
 
 The pressure–velocity tube notebook uses `MASK_SECOND_CHANNEL=True` and `sensors_to_hide=None`: all 12 valid pressure positions are observed, and all velocity measurements are masked. The per-channel error table evaluates those positions using checkpoint `1dtube_v31`.
 
-The measured line-array notebook uses one four-channel input for both PI-ISS reconstruction and the seven-sensor MUSIC baseline. Velocity channels are impedance-scaled for the network and converted back once for the physical-array MUSIC calculation. PI-ISS uses 500 reverse steps. The local interference region is x from −0.6 to 0.6 m and z from 1.6 to 1.8 m. Both MUSIC calculations use pressure and all three velocity channels at 2950 Hz.
+The measured line-array notebook demonstrates one four-channel input shared by PI-ISS reconstruction and the seven-sensor MUSIC baseline. Velocity channels are impedance-scaled for the network and converted back once for the physical-array MUSIC calculation. PI-ISS uses 500 reverse steps. The local interference region is x from −0.6 to 0.6 m and z from 1.6 to 1.8 m. Both MUSIC calculations use pressure and all three velocity channels at 2950 Hz. The `line-measured` script is a separate single-case example with 10 dB channel-wise Gaussian noise.
 
 The dual-frequency pairs and two-source coordinate configurations used for the Figure 5 benchmark are listed in [`configs/figure5_line_array.json`](../configs/figure5_line_array.json).
 
