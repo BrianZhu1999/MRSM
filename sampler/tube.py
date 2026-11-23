@@ -28,17 +28,25 @@ class ChannelScaler1D:
 
 
 def tube_scaler(measured, device, scale_source="record", statistics_path=None):
-    """Use full-record channels or saved training means and standard deviations."""
+    """Scale channels from record, training, or pressure with training channel ratios."""
     if scale_source == "record":
         mean = measured.mean(axis=(0, 1, 3))
         std = measured.std(axis=(0, 1, 3))
-    elif scale_source == "training":
+    elif scale_source in {"training", "pressure-training"}:
         if statistics_path is None:
             raise ValueError("training scaling requires a statistics file")
         statistics = np.load(Path(statistics_path), allow_pickle=False)
         if statistics.size != 4 or statistics.shape[0] != 2:
             raise ValueError("training statistics must contain two channel means and standard deviations")
         mean, std = statistics.reshape(2, 2)
+        if scale_source == "pressure-training":
+            if not np.isfinite(statistics).all() or np.any(std <= 0):
+                raise ValueError("training standard deviations must be positive and finite")
+            pressure = measured[:, :, 0, :]
+            pressure_mean, pressure_std = pressure.mean(), pressure.std()
+            amplitude_ratio = pressure_std / std[0]
+            mean = [pressure_mean, amplitude_ratio * mean[1]]
+            std = [pressure_std, amplitude_ratio * std[1]]
     else:
         raise ValueError(f"unknown tube scale source: {scale_source}")
     return ChannelScaler1D(mean, std, device)

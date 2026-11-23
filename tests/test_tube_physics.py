@@ -86,6 +86,23 @@ class TubePhysicsTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "positive"):
                 tube_scaler(None, "cpu", "training", path)
 
+    def test_pressure_training_scale_uses_pressure_and_saved_training_statistics(self):
+        data = np.random.default_rng(123).normal(size=(1, 12, 2, 5))
+        perturbed = data.copy()
+        perturbed[:, :, 1, :] = perturbed[:, :, 1, :] * 100 + 20
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "scalar.npy"
+            np.save(path, [[0.2, 0.1], [0.8, 0.002]])
+            first = tube_scaler(data, "cpu", "pressure-training", path)
+            second = tube_scaler(perturbed, "cpu", "pressure-training", path)
+            ratio = data[:, :, 0, :].std() / 0.8
+            np.testing.assert_array_equal(first.mean_np.ravel(), [data[:, :, 0, :].mean(), ratio * 0.1])
+            np.testing.assert_array_equal(first.std_np.ravel(), [data[:, :, 0, :].std(), ratio * 0.002])
+            np.testing.assert_array_equal(first.mean_np, second.mean_np)
+            np.testing.assert_array_equal(first.std_np, second.std_np)
+            np.testing.assert_array_equal(pressure_only_observation(data, first),
+                                          pressure_only_observation(perturbed, second))
+
 
 if __name__ == "__main__":
     unittest.main()
