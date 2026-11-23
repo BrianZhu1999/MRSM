@@ -1,6 +1,6 @@
 # Case notebooks
 
-Open a notebook with the repository as its working directory and run its cells in order. The first code cell finds the repository root, sets relative data paths and selects `cuda:0` when CUDA is available. Checkpoint numbers name saved training states. The reverse-diffusion sampling counts are listed separately below. The three root notebooks are entry copies of the corresponding reconstruction notebooks.
+Open a notebook with the repository as its working directory and run its cells in order. The first code cell finds the repository root and sets relative data paths. Select the desired device in the notebook. Checkpoint numbers name saved training states. The reverse-diffusion sampling counts are listed separately below. The three root notebooks are entry copies of the corresponding reconstruction notebooks.
 
 Install data and model files at the paths listed in [data.md](data.md). Notebook outputs are written under `outputs/<case>/`. Dependencies are listed in the repository requirements files.
 
@@ -40,7 +40,7 @@ The free-field demonstration uses PI-ISS observation factor 1 and equal acoustic
 
 For pressure-only tube reconstruction, `evaluate_fpe_sampling.py --case tube-pressure-heldout` observes ten positions and evaluates six held-out positions. The `pressure.ipynb` example observes seven positions and holds out nine.
 
-The pressure–velocity tube notebook uses `MASK_SECOND_CHANNEL=True` and `sensors_to_hide=None`: all 12 valid pressure positions are observed, and all velocity measurements are masked. The per-channel error table evaluates those positions using checkpoint `1dtube_v31`. `scale_source="record"` uses full-record channel statistics; `scale_source="training"` uses the saved training statistics. The settings are in `configs/figure4_tube.json`.
+The pressure–velocity tube notebook uses `MASK_SECOND_CHANNEL=True` and `sensors_to_hide=None`: all 12 valid pressure positions are observed, and all velocity measurements are masked. The per-channel error table evaluates those positions using checkpoint `1dtube_v31`. `scale_source="record"` uses full-record channel statistics; `scale_source="training"` uses the saved training statistics. The evaluator also accepts `pressure-training`, which uses measured pressure statistics and the saved training channel ratio. The settings are in `configs/figure4_tube.json`.
 
 The measured line-array notebook uses the four-channel input shared by all methods and calls `scripts/evaluate_figure5.py`. Its example is 2800/3000 Hz, configuration A, with SRP-PHAT maps. CBF, MUSIC and MVDR use the pair's centre frequency; SRP-PHAT averages the two tone-wise responses. Velocity is impedance-scaled before sampling and converted back afterward. Sampling uses the settings in `configs/figure5_line_array.json`.
 
