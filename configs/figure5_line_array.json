@@ -27,7 +27,8 @@
           -0.98,
           0.67
         ]
-      ]
+      ],
+      "position": 3
     },
     {
       "name": "B",
@@ -41,7 +42,8 @@
           -0.98,
           0.67
         ]
-      ]
+      ],
+      "position": 4
     },
     {
       "name": "C",
@@ -55,7 +57,8 @@
           0.0,
           1.27
         ]
-      ]
+      ],
+      "position": 7
     },
     {
       "name": "D",
@@ -69,7 +72,8 @@
           0.0,
           1.27
         ]
-      ]
+      ],
+      "position": 8
     }
   ],
   "localization_methods": [
@@ -91,5 +95,339 @@
     "plane-wave ridge reconstruction",
     "equivalent-source reconstruction",
     "PI-ISS"
-  ]
+  ],
+  "sampling": {
+    "reverse_steps": 500,
+    "wave_weight": 0.0,
+    "continuity_weight": 0.0,
+    "euler_weight": 0.0,
+    "variation_weight": 1.0,
+    "tone_weight": 0.01,
+    "tone_start_step": 250,
+    "early_guidance_steps": 50,
+    "early_guidance_scale": 0.1,
+    "observation_weight": 0.22360679775,
+    "overlap_weight": 0.1,
+    "overlap": 2,
+    "eta": 0.0,
+    "stochastic_tail_steps": 10,
+    "eps": 1e-12,
+    "target_rms": 0.3,
+    "output": "denoised"
+  },
+  "localization_seeds": [
+    3,
+    4,
+    5
+  ],
+  "heldout_seeds": [
+    1,
+    2,
+    3
+  ],
+  "heldout_indices": [
+    1,
+    2,
+    3,
+    4,
+    5
+  ],
+  "channels": [
+    "p",
+    "vx",
+    "vy",
+    "vz"
+  ],
+  "units": [
+    "Pa",
+    "m/s",
+    "m/s",
+    "m/s"
+  ],
+  "density_kg_m3": 1.21,
+  "sound_speed_m_s": 343.0,
+  "sampling_frequency_hz": 100000.0,
+  "window_start": 2000,
+  "window_length": 1002,
+  "sensor_ids": [
+    "22",
+    "13",
+    "38",
+    "36",
+    "16",
+    "06",
+    "12"
+  ],
+  "sensor_coordinates_m": [
+    [
+      0.48,
+      0.0,
+      0.0
+    ],
+    [
+      0.31999999999999995,
+      0.0,
+      0.0
+    ],
+    [
+      0.15999999999999998,
+      0.0,
+      0.0
+    ],
+    [
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      -0.16000000000000003,
+      0.0,
+      0.0
+    ],
+    [
+      -0.32000000000000006,
+      0.0,
+      0.0
+    ],
+    [
+      -0.48,
+      0.0,
+      0.0
+    ]
+  ],
+  "generated_coordinates_m": [
+    [
+      0.48,
+      0.0,
+      0.0
+    ],
+    [
+      0.44799999999999995,
+      0.0,
+      0.0
+    ],
+    [
+      0.416,
+      0.0,
+      0.0
+    ],
+    [
+      0.384,
+      0.0,
+      0.0
+    ],
+    [
+      0.352,
+      0.0,
+      0.0
+    ],
+    [
+      0.31999999999999995,
+      0.0,
+      0.0
+    ],
+    [
+      0.288,
+      0.0,
+      0.0
+    ],
+    [
+      0.256,
+      0.0,
+      0.0
+    ],
+    [
+      0.22399999999999998,
+      0.0,
+      0.0
+    ],
+    [
+      0.19199999999999995,
+      0.0,
+      0.0
+    ],
+    [
+      0.15999999999999998,
+      0.0,
+      0.0
+    ],
+    [
+      0.128,
+      0.0,
+      0.0
+    ],
+    [
+      0.09599999999999997,
+      0.0,
+      0.0
+    ],
+    [
+      0.06399999999999995,
+      0.0,
+      0.0
+    ],
+    [
+      0.03199999999999997,
+      0.0,
+      0.0
+    ],
+    [
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      -0.03200000000000003,
+      0.0,
+      0.0
+    ],
+    [
+      -0.06400000000000006,
+      0.0,
+      0.0
+    ],
+    [
+      -0.09600000000000009,
+      0.0,
+      0.0
+    ],
+    [
+      -0.128,
+      0.0,
+      0.0
+    ],
+    [
+      -0.16000000000000003,
+      0.0,
+      0.0
+    ],
+    [
+      -0.19200000000000006,
+      0.0,
+      0.0
+    ],
+    [
+      -0.22399999999999998,
+      0.0,
+      0.0
+    ],
+    [
+      -0.256,
+      0.0,
+      0.0
+    ],
+    [
+      -0.28800000000000003,
+      0.0,
+      0.0
+    ],
+    [
+      -0.32000000000000006,
+      0.0,
+      0.0
+    ],
+    [
+      -0.3520000000000001,
+      0.0,
+      0.0
+    ],
+    [
+      -0.384,
+      0.0,
+      0.0
+    ],
+    [
+      -0.41600000000000004,
+      0.0,
+      0.0
+    ],
+    [
+      -0.44800000000000006,
+      0.0,
+      0.0
+    ],
+    [
+      -0.48,
+      0.0,
+      0.0
+    ],
+    [
+      -0.512,
+      0.0,
+      0.0
+    ]
+  ],
+  "observed_generated_indices": [
+    0,
+    5,
+    10,
+    15,
+    20,
+    25,
+    30
+  ],
+  "model": {
+    "configuration": "results/line_array_fpe/config.json",
+    "checkpoint": "results/line_array_fpe/checkpoint.pth",
+    "fine_tune_step": 5000,
+    "weights": "ema"
+  },
+  "files": {
+    "localization_input": "data/figure5/localization/{case}.npz",
+    "heldout_input": "data/figure5/heldout/{case}.npz",
+    "localization_prediction": "source_data/figure5/localization/{case}/seed{seed}/prediction.npz",
+    "heldout_prediction": "source_data/figure5/heldout/{case}/h{heldout}_seed{seed}/prediction.npz",
+    "localization_gain": "data/figure5/localization/transforms/{pair}_gains.npz"
+  },
+  "localization": {
+    "source_count": 2,
+    "source_plane_y_m": 1.0,
+    "bounds_xz_m": [
+      [
+        -1.5,
+        1.5
+      ],
+      [
+        0.01,
+        1.8
+      ]
+    ],
+    "grid_sizes": [
+      301,
+      601,
+      1201
+    ],
+    "mvdr_relative_loading": 0.01,
+    "peak_merge_distance_m": 0.002,
+    "cbf_music_mvdr_frequency": "arithmetic_mean",
+    "srp_frequency": "each_tone_then_average",
+    "ridge_directions": 1024,
+    "ridge_lambda_candidates": [
+      1e-07,
+      1e-06,
+      1e-05,
+      0.0001,
+      0.001,
+      0.01,
+      0.1,
+      1.0
+    ]
+  },
+  "statistics": {
+    "seed_aggregation": "arithmetic_mean_of_per_run_metrics",
+    "condition_count": 12,
+    "localization_per_run_count": 336,
+    "localization_condition_count": 240,
+    "heldout_comparison_count": 60,
+    "heldout_channel_method_values": 1200,
+    "resampling_unit": "source_configuration",
+    "ordered_configuration_resamples": 256,
+    "interval_percentiles": [
+      2.5,
+      97.5
+    ],
+    "sidelobe": "strongest_extra_peak_db_minus_weaker_target_peak_db",
+    "matching": "minimum_sum_of_squared_source_distances",
+    "heldout_processing": "same_two_tone_projection_of_prediction_and_reference"
+  }
 }

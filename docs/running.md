@@ -46,6 +46,25 @@ scripts. `--forward-sleep-seconds` in the multi-case evaluator and
 `--step-sleep-seconds` in the free-field evaluator reduce the duty cycle when
 needed. GPU indices refer to the devices visible to the process.
 
+## Figure 5
+
+```bash
+python scripts/evaluate_figure5.py --task all \
+  --output-dir outputs/figure5
+```
+
+This evaluates the released predictions for all twelve conditions. It writes
+per-run tables, seed-averaged boxplot values and configuration-grouped median
+intervals. Use `--task localization` or `--task heldout` for one evaluation.
+
+```bash
+python scripts/evaluate_figure5.py --task all --resample \
+  --device cuda:2 --output-dir outputs/figure5_resampled
+```
+
+`--resample` generates fields from the released FPE checkpoint before evaluation.
+`--case 2800_3000_pos3` selects the notebook example.
+
 ## Optimization settings
 
 The `train.py` and `train_FT.py` commands in the README accept the same case

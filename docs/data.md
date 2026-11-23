@@ -1,31 +1,25 @@
 # Data and model files
 
 The published data and model checkpoints are available at
-[Zenodo 23938017](https://doi.org/10.5281/zenodo.23938017).
+[Zenodo](https://doi.org/10.5281/zenodo.19398314).
 
-Updated standing-wave data, standing-wave model checkpoints and measured
-line-array data are held in an unpublished Zenodo version draft. The table below
-lists the draft package sizes. Its `data_line_array.zip` contains the twelve
-Figure 5 measurement files specified in
-[`configs/figure5_line_array.json`](../configs/figure5_line_array.json).
-The public record linked above remains the earlier published version.
-
-| Archive | Size (GB) |
-| --- | ---: |
-| `weights_free_field.zip` | 0.302 |
-| `weights_kolmogorov.zip` | 0.605 |
-| `weights_era5.zip` | 0.302 |
-| `weights_standing_wave.zip` | 0.367 |
-| `weights_line_array.zip` | 0.103 |
-| `weights_baselines.zip` | 0.741 |
-| `acoustic_free_field.npy` | 4.473 |
-| `data_free_field_test.zip` | 0.310 |
-| `data_kolmogorov_train.zip.001`–`.009` | 9.175 |
-| `data_kolmogorov_test.zip` | 0.524 |
-| `data_era5.zip` | 2.142 |
-| `data_standing_wave.zip` | 0.290 |
-| `data_line_array.zip` | 0.013 |
-| `data_line_array_simulation.zip` | 2.048 |
+| Archive | Contents |
+| --- | --- |
+| `weights_free_field.zip` | Free-field score model |
+| `weights_kolmogorov.zip` | DSM and FPE flow models |
+| `weights_era5.zip` | ERA5 score model |
+| `weights_standing_wave.zip` | Pressure and pressure–velocity tube models |
+| `weights_line_array.zip` | Simulated-array, measured-array and FPE models |
+| `weights_baselines.zip` | FNO and LNO models |
+| `acoustic_free_field.npy` | Free-field training data |
+| `data_free_field_test.zip` | Free-field test data |
+| `data_kolmogorov_train.zip.001`–`.009` | Flow training data |
+| `data_kolmogorov_test.zip` | Flow test data |
+| `data_era5.zip` | ERA5 training and test data |
+| `data_standing_wave.zip` | Tube training data and measured recordings |
+| `data_line_array.zip` | Twelve Figure 5 conditions, coordinates and FDTD training data |
+| `data_line_array_simulation.zip` | Simulated-array training data |
+| `figure5_results.zip` | Figure 5 predictions, reference fields and result tables |
 
 The Kolmogorov training archive is distributed as nine consecutive binary
 volumes, together with `README_KOLMOGOROV_ARCHIVE.txt` and
@@ -34,7 +28,7 @@ reconstruct and verify `data_kolmogorov_train.zip`.
 
 Download the relevant archives and extract them into the repository root. The
 archives create `data/`, `results/<model>/` and the FNO/LNO result directories.
-Every model package includes its configuration and normalization statistics.
+Every model package includes its configuration and applicable normalization statistics.
 The updated standing-wave and measured-array data ZIPs contain the NumPy
 arrays. Their dimensions, variables and processing are described in
 [Case notebooks](cases.md) and the corresponding notebooks.
@@ -53,7 +47,8 @@ supplied in `data_free_field_test.zip`.
 | ERA5 | `results/era5_v0` | `checkpoint.pth` |
 | Standing wave, pressure and velocity | `results/1dtube_v31` | `checkpoint.pth` |
 | Standing wave, pressure held out | `results/exp_p_v21` | `checkpoint.pth` |
-| Measured line array | `results/line_array_v33` | `checkpoint_600.pth` |
+| Figure 5 line array | `results/line_array_fpe` | `checkpoint.pth` |
+| Measured-array pretraining | `results/line_array_v33` | `checkpoint_600.pth` |
 | Simulated line array | `results/line_array_v3` | `checkpoint.pth` |
 
 The case notebooks use the checkpoints listed above. The
@@ -73,6 +68,13 @@ frequency selection and normalization order given by each case notebook.
 The CSV files under `source_data/` contain the free-field observation-rate and
 regular-downsampling results. [Figure statistics](cases.md#figure-statistics)
 describes their aggregation and filtering.
+
+For Figure 5, `data/figure5/localization/` and `data/figure5/heldout/` contain
+four-channel fields with shape `(7,4,1002)`. Pressure is in Pa and velocity is
+in m/s. `coordinates.npz` gives physical and virtual coordinates in metres.
+`figure5_results.zip` extracts predictions and tables to `source_data/figure5/`.
+The array paths and sampling settings are specified in
+[`configs/figure5_line_array.json`](../configs/figure5_line_array.json).
 
 ERA5 is supplied by ECMWF through the Copernicus Climate Change Service. The
 processed subset uses eastward wind, northward wind, temperature and pressure.

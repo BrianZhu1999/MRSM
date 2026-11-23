@@ -4467,57 +4467,25 @@ def generate_parallel_1d_ISS_1dtube_res(config, net, sde, y, transform, correcto
 
                 reg_loss = 1 * compute_regularization(x0_hat_temp, reg_coef_pa)
 
-                '''
                 loss_phy = torch.tensor(0.0, device=x0_hat_temp.device)
                 loss_wave = torch.tensor(0.0)
                 loss_cont = torch.tensor(0.0)
                 loss_euler = torch.tensor(0.0)
+                loss_bc = torch.tensor(0.0)
 
-                # 只有当系数 > 0 时才计算物理图，否则完全跳过
-                run_physics = (reg_coef_wave > 0 or reg_coef_cont > 0 or reg_coef_euler > 0 or reg_coef_bc > 0)
+                # Enable the wave, continuity and Euler residual terms.
+                run_physics = (reg_coef_wave > 0 or reg_coef_cont > 0 or reg_coef_euler > 0)
+                if 2 <= ncomp < 4:
+                    run_physics = run_physics or reg_coef_bc > 0
 
                 if (ds - i) <= physics_start_step and run_physics:
                     if data_scalar is not None:
                         if ncomp >= 2:
                             x0_hat_unnorm = x0_hat_temp.clone()
                             x0_hat_unnorm[:, :, :ncomp] = data_scalar(x0_hat_temp[:, :, :ncomp])
-                            ''
-                            loss_wave, loss_cont, loss_euler, loss_bc = calculate_physics_residual_loss_1d_3(
-                                x0_hat_unnorm,
-                                c=physics_c,
-                                rho0=physics_rho0,
-                                dt=physics_dt,
-                                dx=physics_dx
-                            )
-
-                            loss_phy = (reg_coef_wave * loss_wave +
-                                        reg_coef_cont * loss_cont +
-                                        reg_coef_euler * loss_euler +
-                                        reg_coef_bc * loss_bc)
-                        else:
-                            if (ds - i) == physics_start_step:
-                                print(f"Warning: Physics loss skipped. Expected ncomp >= 2.")
-                    else:
-                        if (ds - i) == physics_start_step:
-                            print("Warning: Physics loss skipped. 'data_scalar' not provided.")
-                '''
-
-
-                loss_phy = torch.tensor(0.0, device=x0_hat_temp.device)
-                loss_wave = torch.tensor(0.0)
-                loss_cont = torch.tensor(0.0)
-                loss_euler = torch.tensor(0.0)
-                loss_bc = torch.tensor(0.0) # 补齐占位
-
-                # Enable the wave, continuity and Euler residual terms.
-                run_physics = (reg_coef_wave > 0 or reg_coef_cont > 0 or reg_coef_euler > 0)
-
-                if (ds - i) <= physics_start_step and run_physics:
-                    if data_scalar is not None:
-                        if ncomp >= 4:
-                            x0_hat_unnorm = x0_hat_temp.clone()
-                            x0_hat_unnorm[:, :, :ncomp] = data_scalar(x0_hat_temp[:, :, :ncomp])
-                            loss_wave, loss_cont, loss_euler, loss_bc = calculate_physics_residual_loss_1d_full(
+                            residual_fn = (calculate_physics_residual_loss_1d_full if ncomp >= 4
+                                           else calculate_physics_residual_loss_1d_3)
+                            loss_wave, loss_cont, loss_euler, loss_bc = residual_fn(
                                 x0_hat_unnorm,
                                 c=physics_c,
                                 rho0=physics_rho0,
@@ -4529,9 +4497,11 @@ def generate_parallel_1d_ISS_1dtube_res(config, net, sde, y, transform, correcto
                             loss_phy = (reg_coef_wave * loss_wave +
                                         reg_coef_cont * loss_cont +
                                         reg_coef_euler * loss_euler)
+                            if ncomp < 4:
+                                loss_phy = loss_phy + reg_coef_bc * loss_bc
                         else:
                             if (ds - i) == physics_start_step:
-                                print(f"Warning: Physics loss skipped. Expected ncomp >= 4 for full vector PDE.")
+                                print("Warning: Physics loss skipped. Expected ncomp >= 2.")
                     else:
                         if (ds - i) == physics_start_step:
                             print("Warning: Physics loss skipped. 'data_scalar' not provided.")

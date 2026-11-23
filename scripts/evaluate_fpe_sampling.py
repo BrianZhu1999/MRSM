@@ -32,6 +32,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from models import get_ema, get_model  # noqa: E402
 from sampler import VESDE, setup_seed  # noqa: E402
+from sampler.tube import ChannelScaler1D, pressure_only_observation, tube_scaler  # noqa: E402
 from sampler.utils import (  # noqa: E402
     NoneCorrector,
     mask_gen,
@@ -73,6 +74,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--resume", action="store_true")
     parser.add_argument("--save-predictions", action="store_true")
     parser.add_argument("--reverse-steps", type=int, default=None, help="override the number of reverse sampling steps")
+    parser.add_argument("--tube-scale-source", choices=("record", "training"), default=None,
+                        help="tube channel statistics: full measurement record or training data")
+    parser.add_argument("--tube-training-statistics", type=Path, default=None,
+                        help="two-channel mean and standard deviation array used with training scaling")
     parser.add_argument("--max-trials", type=int, default=None, help="evaluate the first N trials")
     parser.add_argument(
         "--temporal-microbatch-target", type=int, default=26,
@@ -133,9 +138,10 @@ def load_model(cfg: SimpleNamespace, checkpoint_path: Path, weights: str,
 
 
 def query_power(gpu_id: int) -> float:
+    gpu_uuid = "GPU-" + str(torch.cuda.get_device_properties(gpu_id).uuid).removeprefix("GPU-")
     output = subprocess.check_output(
         [
-            "nvidia-smi", "-i", str(gpu_id), "--query-gpu=power.draw",
+            "nvidia-smi", "-i", gpu_uuid, "--query-gpu=power.draw",
             "--format=csv,noheader,nounits",
         ],
         text=True,
@@ -181,11 +187,12 @@ class PowerWatchdog:
                     self.marker.write_text(json.dumps(payload, indent=2), encoding="utf-8")
                     os.kill(os.getpid(), signal.SIGTERM)
                     return
-            except Exception as exc:  # The evaluation keeps running but records monitor failure.
+            except Exception as exc:
                 self.marker.write_text(
                     json.dumps({"event": "power_monitor_error", "error": repr(exc)}, indent=2),
                     encoding="utf-8",
                 )
+                os.kill(os.getpid(), signal.SIGTERM)
                 return
 
 
@@ -435,22 +442,6 @@ class ArrayScaler2D:
         if isinstance(array, torch.Tensor):
             return array * self.std_torch + self.mean_torch
         return array * self.std_np.transpose(0, 1, 4, 2, 3) + self.mean_np.transpose(0, 1, 4, 2, 3)
-
-
-class ChannelScaler1D:
-    def __init__(self, mean: np.ndarray, std: np.ndarray, device: torch.device):
-        self.mean_np = np.asarray(mean).reshape(1, 1, -1, 1)
-        self.std_np = np.asarray(std).reshape(1, 1, -1, 1)
-        self.mean_torch = torch.as_tensor(self.mean_np, dtype=torch.float32, device=device)
-        self.std_torch = torch.as_tensor(self.std_np, dtype=torch.float32, device=device)
-
-    def normalize(self, array: np.ndarray) -> np.ndarray:
-        return (array - self.mean_np) / self.std_np
-
-    def unnormalize(self, array: np.ndarray | torch.Tensor) -> np.ndarray | torch.Tensor:
-        if isinstance(array, torch.Tensor):
-            return array * self.std_torch + self.mean_torch
-        return array * self.std_np + self.mean_np
 
 
 def make_net_fn(model: torch.nn.Module, cfg: SimpleNamespace, device: torch.device,
@@ -748,18 +739,18 @@ def evaluate_tube_pressure_heldout(args: argparse.Namespace, cfg: SimpleNamespac
 
 def evaluate_tube(args: argparse.Namespace, cfg: SimpleNamespace, model: torch.nn.Module,
                   device: torch.device, trial_callback) -> None:
-    data_path = Path(str(SOURCE_ROOT / 'data/pu385.npy'))
+    settings = json.loads((SOURCE_ROOT / "configs/figure4_tube.json").read_text(encoding="utf-8"))
+    data_path = SOURCE_ROOT / settings["data_path"]
     data = np.load(data_path, mmap_mode="r")
-    valid_sensors = np.array([1, 3, 4, 5, 6, 7, 8, 10, 11, 12, 13, 14])
+    valid_sensors = np.array(settings["sensor_indices_zero_based"])
     measured = np.asarray(data[:, :, :, valid_sensors])
-    mean = measured.mean(axis=(0, 1, 3))
-    std = measured.std(axis=(0, 1, 3))
-    scaler = ChannelScaler1D(mean, std, device)
-    overlap = 2
-    # The standing-wave comparison uses the window beginning at sample 100.
-    starts = [100]
-    sequence_length = aligned_length(200, cfg.num_frames, overlap)
-    model_positions = torch.as_tensor(valid_sensors * 4, dtype=torch.long, device=device)
+    scale_source = args.tube_scale_source or settings["scale_source"]
+    statistics_path = args.tube_training_statistics or SOURCE_ROOT / settings["training_statistics_path"]
+    scaler = tube_scaler(measured, device, scale_source, statistics_path)
+    overlap = settings["overlap"]
+    starts = [settings["window_start"]]
+    sequence_length = aligned_length(settings["target_frames"], cfg.num_frames, overlap)
+    model_positions = torch.as_tensor(valid_sensors * settings["sensor_grid_stride"], dtype=torch.long, device=device)
     channel_mask = torch.tensor([1.0, 0.0], device=device).view(1, 1, 2, 1)
 
     def transform(x):
@@ -767,23 +758,22 @@ def evaluate_tube(args: argparse.Namespace, cfg: SimpleNamespace, model: torch.n
 
     spatial_sparsity = 1 - len(valid_sensors) / cfg.image_size
     sparsity = (spatial_sparsity + 1.0) / 2.0
-    reverse_steps = args.reverse_steps or 100
+    reverse_steps = args.reverse_steps or settings["reverse_steps"]
     methods = methods_for(args, ["sde", "iss", "pi-iss"])
-    net_fn = make_net_fn(model, cfg, device)
+    net_fn = make_net_fn(model, cfg, device, args.forward_sleep_seconds)
 
     for start in starts:
-        normalized = scaler.normalize(
-            measured[:, start:start + sequence_length]
-        ).astype(np.float32)
         raw = measured[:, start:start + sequence_length]
-        observation = normalized.copy()
-        observation[:, :, 1, :] = 0.0
+        observation = pressure_only_observation(raw, scaler)
         for method in methods:
             trial = {
                 "start": start,
                 "sequence_length": sequence_length,
                 "reverse_steps": reverse_steps,
-                "sampling_seed": 123,
+                "sampling_seed": settings["sampling_seed"],
+                "scale_source": scale_source,
+                "normalization_mean": scaler.mean_np.ravel().tolist(),
+                "normalization_std": scaler.std_np.ravel().tolist(),
                 "pressure_sensor_indices_zero_based": valid_sensors.tolist(),
                 "pressure_sensor_indices_one_based": (valid_sensors + 1).tolist(),
                 "pressure_sensor_count": 12,
@@ -791,12 +781,13 @@ def evaluate_tube(args: argparse.Namespace, cfg: SimpleNamespace, model: torch.n
             }
             if trial_callback.is_complete(method, trial):
                 continue
-            setup_seed(123)
+            setup_seed(settings["sampling_seed"])
             sde = VESDE(cfg, sigma_min=cfg.beta_min, sigma_max=cfg.beta_max, N=reverse_steps)
             if method == "sde":
                 prediction = s3gm_sample_1d(
                     cfg, net_fn, sde, observation, transform,
-                    alpha=0.5 / np.sqrt(1 - sparsity), beta=0.4, gamma=0.5,
+                    alpha=settings["alpha"] / np.sqrt(1 - sparsity),
+                    beta=settings["beta"], gamma=settings["gamma"],
                     T_prime_y=sequence_length, T_prime=sequence_length, overlap=overlap,
                     corrector=NoneCorrector, snr=0.128, device=str(device), dtype="float",
                     eps=1e-12, probability_flow=False, continuous=True,
@@ -804,7 +795,8 @@ def evaluate_tube(args: argparse.Namespace, cfg: SimpleNamespace, model: torch.n
             elif method == "iss":
                 prediction = s3gm_sample_1d_ISS(
                     cfg, net_fn, sde, observation, transform,
-                    alpha=0.5 / np.sqrt(1 - sparsity), beta=0.4, gamma=0.5,
+                    alpha=settings["alpha"] / np.sqrt(1 - sparsity),
+                    beta=settings["beta"], gamma=settings["gamma"],
                     T_prime_y=sequence_length, T_prime=sequence_length, overlap=overlap,
                     denoising_steps=reverse_steps, eta=0, corrector=NoneCorrector,
                     snr=0.128, device=str(device), dtype="float", eps=1e-12,
@@ -813,18 +805,17 @@ def evaluate_tube(args: argparse.Namespace, cfg: SimpleNamespace, model: torch.n
             else:
                 prediction = s3gm_sample_1d_ISS_1dtube_res(
                     cfg, net_fn, sde, observation, transform,
-                    alpha=0.5 / np.sqrt(1 - sparsity), beta=0.4, gamma=0.5,
+                    alpha=settings["alpha"] / np.sqrt(1 - sparsity),
+                    beta=settings["beta"], gamma=settings["gamma"],
                     T_prime_y=sequence_length, T_prime=sequence_length, overlap=overlap,
-                    denoising_steps=reverse_steps, eta=0, reg_coef_pa=0.1 * sequence_length,
+                    denoising_steps=reverse_steps, eta=0, reg_coef_pa=settings["regularization_per_frame"] * sequence_length,
                     data_scalar=scaler.unnormalize, physics_start_step=reverse_steps,
-                    physics_c=343.0, physics_rho0=1.21, physics_dt=1e-4, physics_dx=0.02,
-                    reg_coef_wave=0.1, reg_coef_cont=0.1, reg_coef_euler=0.1,
-                    reg_coef_bc=0.0, normalized_velocity_zero=None,
+                    **settings["physics_params"],
                     corrector=NoneCorrector, snr=0.128, device=str(device), dtype="float",
                     eps=1e-12, probability_flow=False, continuous=True,
                 )
             physical = np.asarray(scaler.unnormalize(prediction))
-            physical_at_sensors = physical[:, :, :, valid_sensors * 4]
+            physical_at_sensors = physical[:, :, :, valid_sensors * settings["sensor_grid_stride"]]
             metrics = metric_bundle(raw[0], physical_at_sensors[0], ["pressure", "velocity"])
             metrics["phase_amplitude_at_12_measured_sensors"] = tube_phase_amplitude(
                 raw[0], physical_at_sensors[0], ["pressure", "velocity"]
@@ -835,17 +826,20 @@ def evaluate_tube(args: argparse.Namespace, cfg: SimpleNamespace, model: torch.n
                     SOURCE_ROOT / "notebooks/tube/pressure_velocity.ipynb"
                 ),
                 "data_path": str(data_path),
-                "excitation_frequency_hz": 385,
+                "excitation_frequency_hz": settings["excitation_frequency_hz"],
                 "paper_displayed_method": "PI-ISS",
                 "paper_numeric_anchor_available": False,
                 "pressure": "observed at all 12 evaluation sensors",
                 "velocity": "fully hidden at all 12 evaluation sensors",
                 "dense_64_point_ground_truth_available": False,
-                "pi_iss_physics_residual_active": False,
-                "pi_iss_physics_note": (
-                    "Physics residuals are evaluated for configurations with at least four "
-                    "components. They are inactive for this two-component pressure/velocity case."
-                ),
+                "pi_iss_physics_residual_active": method == "pi-iss",
+                "normalization": {
+                    "source": scale_source,
+                    "mean": scaler.mean_np.ravel().tolist(),
+                    "std": scaler.std_np.ravel().tolist(),
+                    "uses_reference_velocity_statistics": scale_source == "record",
+                    "training_statistics_path": str(statistics_path) if scale_source == "training" else None,
+                },
             }
             trial_callback(method, trial, metrics, physical)
 

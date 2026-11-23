@@ -13,8 +13,8 @@ Install data and model files at the paths listed in [data.md](data.md). Notebook
 | Free-field spatial downsampling | `notebooks/free_field/downsampling.ipynb` | `results/2DSound_v22`, checkpoint 200 | 100 | 375 Hz, 2–6× downsampling; five selected time windows; FNO/LNO weights matched to each scale |
 | Free-field plots from CSV | `notebooks/free_field/source_figures.ipynb` | — | — | Plot the two source-data CSV tables |
 | Pressure-only tube | `notebooks/tube/pressure.ipynb` | `results/exp_p_v21` | 500 | 395 Hz; seven of 16 positions observed; nine positions withheld |
-| Pressure–velocity tube | `notebooks/tube/pressure_velocity.ipynb` | `results/1dtube_v31` | 100 | 385 Hz; 12 valid positions; pressure observations and reconstructed velocity by default |
-| Measured line array | `notebooks/line_array/reconstruction_music.ipynb` | `results/line_array_v33`, checkpoint 600 | 500 | Seven sensors, 32 virtual positions; full-vector MUSIC at the centre frequency of the selected dual-frequency pair |
+| Pressure–velocity tube | `notebooks/tube/pressure_velocity.ipynb` | `results/1dtube_v31` | 500 | 385 Hz; 12 valid positions; pressure observations and reconstructed velocity by default |
+| Measured line array | `notebooks/line_array/reconstruction_music.ipynb` | `results/line_array_fpe`, FPE step 5000 | 500 | Seven sensors, 32 virtual positions; CBF, MUSIC, MVDR and SRP-PHAT |
 | Kolmogorov reconstruction and spectrum | `notebooks/kolmogorov/reconstruction_spectrum.ipynb` | `results/kol_v1_finetune_FPE`, checkpoint 517 | 100 | Regular 6× sampling; velocity error and kinetic-energy spectrum |
 | Kolmogorov spatial downsampling | `notebooks/kolmogorov/downsampling.ipynb` | `results/kol_v1_finetune_FPE`, checkpoint 517 | 100 | 2–6× downsampling and five seeds |
 | ERA5 reconstruction | `notebooks/era5/reconstruction.ipynb` | `results/era5_v0` | 50 | 5% observed positions; four channels |
@@ -40,9 +40,9 @@ The free-field demonstration uses PI-ISS observation factor 1 and equal acoustic
 
 For pressure-only tube reconstruction, `evaluate_fpe_sampling.py --case tube-pressure-heldout` observes ten positions and evaluates six held-out positions. The `pressure.ipynb` example observes seven positions and holds out nine.
 
-The pressure–velocity tube notebook uses `MASK_SECOND_CHANNEL=True` and `sensors_to_hide=None`: all 12 valid pressure positions are observed, and all velocity measurements are masked. The per-channel error table evaluates those positions using checkpoint `1dtube_v31`.
+The pressure–velocity tube notebook uses `MASK_SECOND_CHANNEL=True` and `sensors_to_hide=None`: all 12 valid pressure positions are observed, and all velocity measurements are masked. The per-channel error table evaluates those positions using checkpoint `1dtube_v31`. `scale_source="record"` uses full-record channel statistics; `scale_source="training"` uses the saved training statistics. The settings are in `configs/figure4_tube.json`.
 
-The measured line-array notebook demonstrates a four-channel input shared by PI-ISS reconstruction and the seven-sensor MUSIC baseline. Velocity channels are impedance-scaled for the network and converted back once for the physical-array MUSIC calculation. PI-ISS uses 500 reverse steps. The local interference region is x from −0.6 to 0.6 m and z from 1.6 to 1.8 m. Both MUSIC calculations use pressure and all three velocity channels at the centre frequency of the selected dual-frequency pair. The Figure 5 input files are the three dual-frequency pairs crossed with the four two-source configurations listed in `configs/figure5_line_array.json`.
+The measured line-array notebook uses the four-channel input shared by all methods and calls `scripts/evaluate_figure5.py`. Its example is 2800/3000 Hz, configuration A, with SRP-PHAT maps. CBF, MUSIC and MVDR use the pair's centre frequency; SRP-PHAT averages the two tone-wise responses. Velocity is impedance-scaled before sampling and converted back afterward. Sampling uses the settings in `configs/figure5_line_array.json`.
 
 The dual-frequency pairs and two-source coordinate configurations used for the Figure 5 benchmark are listed in [`configs/figure5_line_array.json`](../configs/figure5_line_array.json).
 
@@ -57,3 +57,15 @@ The two free-field CSV tables are described in [source_data/README.md](../source
 For the downsampling panel, `source_figures.ipynb` omits values above Q3 + 1.5 times the interquartile range. Means and population standard deviations use four trials for LNO and FNO at 4× and 5× downsampling and SDE at 6×; the other combinations use five trials. The CSV contains all five trial values per combination.
 
 The downsampling evaluator aggregates errors below 999; the value 999 marks a failed evaluation.
+
+Figure 5 localization boxes contain twelve condition-level values. Each value
+is the root mean square of the two matched source distances. PI-ISS values are
+averaged over three seeds within each condition. The sidelobe metric subtracts
+the weaker target peak level from the highest extra peak level after spatial
+refinement and target-basin assignment.
+
+Field reconstruction holds out each of the five interior sensors in turn and
+uses the remaining six as inputs. Prediction and reference are projected onto
+the same dual-frequency basis. Each physical channel and method contributes
+sixty seed-averaged nRMSE values across the twelve conditions and five held-out
+positions. Tables are in `source_data/figure5/`.

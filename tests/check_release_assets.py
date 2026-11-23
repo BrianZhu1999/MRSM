@@ -28,6 +28,7 @@ CHECKPOINTS = {
     "1dtube_v31": "checkpoint.pth",
     "exp_p_v21": "checkpoint.pth",
     "line_array_v33": "checkpoint_600.pth",
+    "line_array_fpe": "checkpoint.pth",
     "line_array_v3": "checkpoint.pth",
 }
 ARRAYS = {
@@ -52,6 +53,7 @@ ARRAYS = {
     "data/tube175_resampled_calibrated.npy": (1, 100000, 1, 16),
     "data/tube345_resampled_calibrated.npy": (1, 100000, 1, 16),
     "data/tube395_resampled_calibrated.npy": (1, 100000, 1, 16),
+    "data/fdtd_targeted_400_0.032.npy": (400, 1000, 32, 4),
     "data/fdtd_3d_data_norm.npy": (1500, 2000, 32, 4),
     "data/fdtd_3d_data_an_norm.npy": (500, 2000, 32, 4),
 }
@@ -91,6 +93,8 @@ def main():
     for name, filename in CHECKPOINTS.items():
         directory = ROOT / "results" / name
         config = json.loads((directory / "config.json").read_text())
+        if not (ROOT / config["data_location"]).is_file():
+            raise FileNotFoundError(f"Training data for {name}: {config['data_location']}")
         config["num_channels"] = config["num_components"] + config["num_conditions"]
         model = get_model(SimpleNamespace(**config)).cpu()
         ema = get_ema(model.parameters(), decay=config["ema_rate"])
