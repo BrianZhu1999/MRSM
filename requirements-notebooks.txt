@@ -2,3 +2,4 @@
 jupyterlab==4.4.0
 ipykernel==6.29.5
 cartopy==0.24.1
+xlrd==2.0.1
