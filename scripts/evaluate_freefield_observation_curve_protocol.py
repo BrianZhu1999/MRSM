@@ -71,7 +71,7 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="finish evaluation and record out-of-tolerance reference comparisons",
     )
-    parser.add_argument("--power-ceiling-w", type=float, default=250.0)
+    parser.add_argument("--power-ceiling-w", type=float, default=400.0)
     parser.add_argument("--power-poll-seconds", type=float, default=0.25)
     parser.add_argument("--step-sleep-seconds", type=float, default=0.2)
     return parser.parse_args()

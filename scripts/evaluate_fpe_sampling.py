@@ -44,7 +44,6 @@ from sampler.utils import (  # noqa: E402
     s3gm_sample_2d_ISS_2dsound_res,
     s3gm_sample_2d_ISS_ERA5,
 )
-from scripts.line_array_metrics import match_source_positions  # noqa: E402
 
 
 ALLOWED_GPU_IDS = {0, 1, 2, 3}
@@ -55,8 +54,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--case", choices=(
-            "2dsound", "tube-pressure-heldout", "tube", "line-sim",
-            "line-measured", "era5",
+            "2dsound", "tube-pressure-heldout", "tube", "era5",
         ),
         required=True,
     )
@@ -70,7 +68,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--profile", choices=("screen", "full"), default="full")
     parser.add_argument("--weights", choices=("ema", "model"), default="ema")
     parser.add_argument("--methods", default=None, help="comma-separated override")
-    parser.add_argument("--power-ceiling-w", type=float, default=250.0)
+    parser.add_argument("--power-ceiling-w", type=float, default=400.0)
     parser.add_argument("--power-poll-seconds", type=float, default=0.25)
     parser.add_argument("--resume", action="store_true")
     parser.add_argument("--save-predictions", action="store_true")
@@ -83,14 +81,6 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--forward-sleep-seconds", type=float, default=0.0,
         help="delay after each score-network call to reduce GPU duty cycle",
-    )
-    parser.add_argument(
-        "--line-noise-seed", type=int, default=20260906,
-        help="AWGN realization for the measured line-array protocol",
-    )
-    parser.add_argument(
-        "--line-sampling-seed", type=int, default=3,
-        help="reverse-diffusion seed for the measured line-array protocol",
     )
     return parser.parse_args()
 
@@ -860,273 +850,6 @@ def evaluate_tube(args: argparse.Namespace, cfg: SimpleNamespace, model: torch.n
             trial_callback(method, trial, metrics, physical)
 
 
-def evaluate_line_sim(args: argparse.Namespace, cfg: SimpleNamespace, model: torch.nn.Module,
-                      device: torch.device, trial_callback) -> None:
-    data_path = Path(str(SOURCE_ROOT / 'data/fdtd_3d_data_an_100_test.npy'))
-    data = np.load(data_path, mmap_mode="r")
-    test_ids = [10] if args.profile == "screen" else [30, 40, 50, 60, 70]
-    if args.max_trials is not None:
-        test_ids = test_ids[:args.max_trials]
-    methods = methods_for(args, ["pi-iss"])
-    if methods != ["pi-iss"]:
-        raise ValueError("line-sim supports the PI-ISS method")
-    # v33 uses impedance-matched inputs (p, Z0*vx, Z0*vy, Z0*vz),
-    # 1000 frames, 500 reverse steps and 7 of 32 regularly spaced sensors.
-    impedance = 1.21 * 343.0
-    inverse_scale = np.array(
-        [1.0, 1 / impedance, 1 / impedance, 1 / impedance], dtype=np.float32
-    ).reshape(1, 1, 4, 1)
-
-    def to_physical(x):
-        if isinstance(x, torch.Tensor):
-            scale_tensor = torch.as_tensor(inverse_scale, dtype=x.dtype, device=x.device)
-            return x * scale_tensor
-        return x * inverse_scale
-
-    overlap, scale = 2, 5
-    sequence_length = aligned_length(1000, cfg.num_frames, overlap)
-    reverse_steps = args.reverse_steps or 500
-    sparsity = 1 - 1 / scale
-    net_fn = make_net_fn(model, cfg, device)
-
-    for test_id in test_ids:
-        trial = {"test_id": test_id, "start": 0, "scale": scale,
-                 "sequence_length": sequence_length, "sampling_seed": 3,
-                 "network_units": "p,Z0*vx,Z0*vy,Z0*vz", "impedance": impedance}
-        if trial_callback.is_complete("pi-iss", trial):
-            continue
-        raw_thc = np.asarray(data[test_id, :sequence_length])
-        network_thc = raw_thc.copy()
-        network_thc[..., 1:] *= impedance
-        normalized_thc = network_thc[np.newaxis].transpose(0, 1, 3, 2).astype(np.float32)
-        raw = raw_thc[np.newaxis].transpose(0, 1, 3, 2)
-        transform = lambda x: x[:, :sequence_length, :cfg.num_components, ::scale]
-        observation = transform(normalized_thc).astype(np.float32)
-        setup_seed(3)
-        sde = VESDE(cfg, sigma_min=cfg.beta_min, sigma_max=cfg.beta_max, N=reverse_steps)
-        prediction = s3gm_sample_1d_ISS_1dtube_res(
-            cfg, net_fn, sde, observation, transform,
-            alpha=0.1 / np.sqrt(1 - sparsity), beta=0.1, gamma=0.5,
-            T_prime_y=sequence_length, T_prime=sequence_length, overlap=overlap,
-            denoising_steps=reverse_steps, eta=0, reg_coef_pa=1.0,
-            data_scalar=to_physical, physics_start_step=reverse_steps,
-            physics_c=343.0, physics_rho0=1.21, physics_dt=1e-5, physics_dx=0.032,
-            reg_coef_wave=1e-3, reg_coef_cont=0.0, reg_coef_euler=0.0,
-            reg_coef_bc=0.0, normalized_velocity_zero=None,
-            corrector=NoneCorrector, snr=0.128, device=str(device), dtype="float",
-            eps=1e-12, probability_flow=False, continuous=True,
-        )
-        physical = np.asarray(to_physical(prediction))
-        metrics = {
-            "normalized": metric_bundle(
-                normalized_thc[0], prediction[0], ["pressure", "vx", "vy", "vz"]
-            ),
-            "physical": metric_bundle(raw[0], physical[0], ["pressure", "vx", "vy", "vz"]),
-        }
-        observed = np.zeros(cfg.image_size, dtype=bool)
-        observed[::scale] = True
-        metrics["normalized_unobserved_only"] = metric_bundle(
-            normalized_thc[0][:, :, ~observed], prediction[0][:, :, ~observed],
-            ["pressure", "vx", "vy", "vz"],
-        )
-        metrics["physical_unobserved_only"] = metric_bundle(
-            raw[0][:, :, ~observed], physical[0][:, :, ~observed],
-            ["pressure", "vx", "vy", "vz"],
-        )
-        metrics["evaluation_scope"] = {
-            "pi_iss_physics_residual_active": True,
-            "pi_iss_physics_note": (
-                "The v33 protocol activates the wave-equation residual with coefficient "
-                "1e-3; continuity, Euler and boundary coefficients remain zero."
-            ),
-        }
-        trial_callback("pi-iss", trial, metrics, physical)
-
-
-def add_awgn_per_channel(signal: np.ndarray, snr_db: float, seed: int) -> np.ndarray:
-    rng = np.random.default_rng(seed)
-    noisy = np.zeros_like(signal)
-    for sensor_index in range(signal.shape[0]):
-        for channel_index in range(signal.shape[1]):
-            trace = signal[sensor_index, channel_index]
-            signal_power = float(np.mean(trace ** 2))
-            if signal_power == 0:
-                noisy[sensor_index, channel_index] = trace
-            else:
-                noise_std = np.sqrt(signal_power / (10 ** (snr_db / 10)))
-                noisy[sensor_index, channel_index] = trace + rng.normal(
-                    0.0, noise_std, trace.shape
-                )
-    return noisy
-
-
-def music_pv_map(data_phys: np.ndarray, coordinates: np.ndarray, frequency: float,
-                 scan_points: int = 150) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    sound_speed, impedance = 343.0, 1.21 * 343.0
-    wave_number = 2 * np.pi * frequency / sound_speed
-    scaled = np.asarray(data_phys, dtype=np.float64).copy()
-    scaled[:, 1:, :] *= impedance
-    analytic = hilbert(scaled, axis=-1)
-    snapshots = analytic.reshape(len(coordinates) * 4, -1)
-    covariance = snapshots @ snapshots.conj().T / snapshots.shape[1]
-    eigenvalues, eigenvectors = np.linalg.eigh(covariance)
-    noise_vectors = eigenvectors[:, np.argsort(eigenvalues)[::-1]][:, 2:]
-
-    scan_x = np.linspace(-1.5, 1.5, scan_points)
-    scan_z = np.linspace(0.01, 1.8, scan_points)
-    x_grid, z_grid = np.meshgrid(scan_x, scan_z)
-    points = np.stack(
-        [x_grid.reshape(-1), np.ones(x_grid.size), z_grid.reshape(-1)], axis=1
-    )
-    difference = coordinates[np.newaxis, :, :] - points[:, np.newaxis, :]
-    distance = np.linalg.norm(difference, axis=2)
-    direction = difference / np.maximum(distance[:, :, np.newaxis], 1e-12)
-    propagation = np.exp(-1j * wave_number * distance) / np.maximum(distance, 1e-12)
-    block = propagation[:, :, np.newaxis] * np.concatenate(
-        [np.ones((*direction.shape[:2], 1)), direction], axis=2
-    )
-    steering = block.reshape(len(points), -1).T
-    steering /= np.maximum(np.linalg.norm(steering, axis=0, keepdims=True), 1e-12)
-    projection = noise_vectors.conj().T @ steering
-    spectrum = 1.0 / (np.sum(np.abs(projection) ** 2, axis=0) + 1e-12)
-    spectrum = spectrum.reshape(x_grid.shape)
-    spectrum_db = 10 * np.log10(spectrum / np.max(spectrum))
-    return x_grid, z_grid, spectrum_db
-
-
-def two_source_localization(x_grid: np.ndarray, z_grid: np.ndarray,
-                            spectrum_db: np.ndarray,
-                            true_positions: np.ndarray) -> dict:
-    order = np.argsort(spectrum_db.reshape(-1))[::-1]
-    estimates = []
-    for flat_index in order:
-        point = np.array([x_grid.reshape(-1)[flat_index], z_grid.reshape(-1)[flat_index]])
-        if all(np.linalg.norm(point - previous) >= 0.15 for previous in estimates):
-            estimates.append(point)
-        if len(estimates) == 2:
-            break
-    estimates_array = np.asarray(estimates)
-    true_indices, estimate_indices, errors = match_source_positions(
-        true_positions, estimates_array
-    )
-    return {
-        "estimated_xz_m": estimates_array[estimate_indices].tolist(),
-        "true_xz_m": true_positions[true_indices].tolist(),
-        "per_source_error_m": errors.tolist(),
-        "mean_localization_error_m": float(errors.mean()),
-        "localization_rmse_m": float(np.sqrt(np.mean(errors ** 2))),
-        "max_localization_error_m": float(errors.max()),
-    }
-
-
-def interference_peak(x_grid: np.ndarray, z_grid: np.ndarray,
-                      spectrum_db: np.ndarray) -> float:
-    region = (
-        (x_grid >= -0.6) & (x_grid <= 0.6) &
-        (z_grid >= 1.6) & (z_grid <= 1.8)
-    )
-    return float(np.max(spectrum_db[region]))
-
-
-def evaluate_line_measured(args: argparse.Namespace, cfg: SimpleNamespace,
-                           model: torch.nn.Module, device: torch.device,
-                           trial_callback) -> None:
-    data_path = Path(
-        str(SOURCE_ROOT / 'data/Aligned_2900_3000_pos5.npy')
-    )
-    raw = np.load(data_path)
-    impedance = 1.21 * 343.0
-    network_units = raw.copy()
-    network_units[:, 1:, :] *= impedance
-    noise_seed, snr_db = args.line_noise_seed, 10.0
-    sampling_seed = args.line_sampling_seed
-    noisy_network_units = add_awgn_per_channel(network_units, snr_db, noise_seed)
-    overlap, start = 2, 2000
-    sequence_length = aligned_length(1000, cfg.num_frames, overlap)
-    observation = noisy_network_units[:, :, start:start + sequence_length].transpose(
-        2, 1, 0
-    )[np.newaxis].astype(np.float32)
-    scale, reverse_steps = 5, args.reverse_steps or 500
-    sparsity = 1 - 1 / scale
-    transform = lambda x: x[:, :sequence_length, :4, ::scale]
-    net_fn = make_net_fn(model, cfg, device)
-    methods = methods_for(args, ["pi-iss"])
-    if methods != ["pi-iss"]:
-        raise ValueError("line-measured supports the PI-ISS method")
-    trial = {
-        "measurement_file": str(data_path), "position": "pos5",
-        "frequency_band_hz": [2900, 3000], "start": start,
-        "sequence_length": sequence_length, "snr_db": snr_db,
-        "noise_seed": noise_seed, "sampling_seed": sampling_seed,
-    }
-    if trial_callback.is_complete("pi-iss", trial):
-        return
-
-    inverse_scale = np.array([1.0, 1 / impedance, 1 / impedance, 1 / impedance]).reshape(
-        1, 1, 4, 1
-    )
-
-    def to_physical(x):
-        if isinstance(x, torch.Tensor):
-            scale_tensor = torch.as_tensor(inverse_scale, dtype=x.dtype, device=x.device)
-            return x * scale_tensor
-        return x * inverse_scale
-
-    setup_seed(sampling_seed)
-    sde = VESDE(cfg, sigma_min=cfg.beta_min, sigma_max=cfg.beta_max, N=reverse_steps)
-    prediction = s3gm_sample_1d_ISS_1dtube_res(
-        cfg, net_fn, sde, observation, transform,
-        alpha=0.1 / np.sqrt(1 - sparsity), beta=0.1, gamma=0.5,
-        T_prime_y=sequence_length, T_prime=sequence_length, overlap=overlap,
-        denoising_steps=reverse_steps, eta=0, reg_coef_pa=1.0,
-        data_scalar=to_physical, physics_start_step=reverse_steps,
-        physics_c=343.0, physics_rho0=1.21, physics_dt=1e-5, physics_dx=0.032,
-        reg_coef_wave=1e-3, reg_coef_cont=0.0, reg_coef_euler=0.0,
-        reg_coef_bc=0.0, normalized_velocity_zero=None,
-        corrector=NoneCorrector, snr=0.128, device=str(device), dtype="float",
-        eps=1e-12, probability_flow=False, continuous=True,
-    )
-    prediction_phys = np.asarray(to_physical(prediction))
-    reconstruction_32 = prediction_phys[0].transpose(2, 1, 0)
-    clean_7 = raw[:, :, start:start + sequence_length]
-    noisy_7 = np.asarray(to_physical(observation))[0].transpose(2, 1, 0)
-    coordinates_7 = np.zeros((7, 3))
-    coordinates_7[:, 0] = 0.48 - np.arange(7) * 0.16
-    coordinates_32 = np.zeros((32, 3))
-    coordinates_32[:, 0] = 0.48 - np.arange(32) * 0.032
-    frequency = 2950.0
-    true_positions = np.array([[0.94, 1.17], [-0.98, 1.27]])
-    maps = {}
-    for name, field, coordinates in (
-        ("clean_7_sensor", clean_7, coordinates_7),
-        ("noisy_7_sensor", noisy_7, coordinates_7),
-        ("reconstructed_32_sensor", reconstruction_32, coordinates_32),
-    ):
-        x_grid, z_grid, spectrum_db = music_pv_map(field, coordinates, frequency)
-        maps[name] = {
-            "localization": two_source_localization(
-                x_grid, z_grid, spectrum_db, true_positions
-            ),
-            "interference_region_peak_db": interference_peak(
-                x_grid, z_grid, spectrum_db
-            ),
-        }
-    maps["interference_suppression_db_vs_clean_7"] = (
-        maps["clean_7_sensor"]["interference_region_peak_db"] -
-        maps["reconstructed_32_sensor"]["interference_region_peak_db"]
-    )
-    maps["interference_suppression_db_vs_noisy_7"] = (
-        maps["noisy_7_sensor"]["interference_region_peak_db"] -
-        maps["reconstructed_32_sensor"]["interference_region_peak_db"]
-    )
-    metrics = {
-        "dense_ground_truth_available": False,
-        "nrmse_reported": False,
-        "music_p_plus_v": maps,
-    }
-    trial_callback("pi-iss", trial, metrics, prediction_phys)
-
-
 def era5_physical(array: np.ndarray, scalars: np.ndarray) -> np.ndarray:
     mean = scalars[:, 0].reshape(1, 1, -1, 1, 1)
     std = scalars[:, 1].reshape(1, 1, -1, 1, 1)
@@ -1234,8 +957,6 @@ EVALUATORS = {
     "2dsound": evaluate_2dsound,
     "tube-pressure-heldout": evaluate_tube_pressure_heldout,
     "tube": evaluate_tube,
-    "line-sim": evaluate_line_sim,
-    "line-measured": evaluate_line_measured,
     "era5": evaluate_era5,
 }
 

@@ -26,7 +26,6 @@ CHECKPOINTS = {
     "kol_v1_finetune_FPE": "checkpoint_517.pth",
     "era5_v0": "checkpoint.pth",
     "1dtube_v31": "checkpoint.pth",
-    "1dtube_v41": "checkpoint.pth",
     "exp_p_v21": "checkpoint.pth",
     "line_array_v33": "checkpoint_600.pth",
     "line_array_v3": "checkpoint.pth",
@@ -38,11 +37,9 @@ ARRAYS = {
     "results/kol_v1_finetune_FPE/scalar.npy": (2,),
     "results/era5_v0/scalars_era5.npy": (4, 2),
     "results/1dtube_v31/scalar.npy": (2, 1, 1, 1, 2),
-    "results/1dtube_v41/scalar.npy": (2, 1, 1, 1, 2),
     "results/exp_p_v21/scalar.npy": (2,),
     "results/line_array_v33/scalar.npy": (2,),
     "results/line_array_v3/scalar.npy": (2,),
-    "data/scalar.npy": (),
     "data/anechoic_high_prec_dataset_last700_test_2.npy": (9, 700, 64, 64, 3),
     "data/kolmogorov_flow_train.npy": (700, 400, 64, 64, 2),
     "data/kolmogorov/kolmogorov_flow_test.npy": (20, 400, 64, 64, 2),
@@ -51,19 +48,17 @@ ARRAYS = {
     "data/era5/scalars_era5.npy": (4, 2),
     "data/tube_pressure_velocity_train.npy": (78, 2001, 64, 2),
     "data/tube_pressure_train.npy": (78, 2001, 64, 1),
-    "data/tube_highfre.npy": (205, 2001, 64, 2),
-    "data/tube_highfre_test.npy": (20, 2001, 64, 2),
     "data/pu385.npy": (1, 50000, 2, 15),
-    "data/pu1139.npy": (1, 50000, 2, 16),
     "data/tube175_resampled_calibrated.npy": (1, 100000, 1, 16),
     "data/tube345_resampled_calibrated.npy": (1, 100000, 1, 16),
     "data/tube395_resampled_calibrated.npy": (1, 100000, 1, 16),
-    "data/fdtd_targeted_400_0.032.npy": (400, 1000, 32, 4),
-    "data/Aligned_2900_3000_pos5.npy": (7, 4, 5000),
-    "data/fdtd_3d_data_an_100_test.npy": (100, 2000, 32, 4),
     "data/fdtd_3d_data_norm.npy": (1500, 2000, 32, 4),
     "data/fdtd_3d_data_an_norm.npy": (500, 2000, 32, 4),
 }
+
+for frequency_pair in ((2800, 2900), (2800, 3000), (2900, 3000)):
+    for configuration in ("pos3", "pos4", "pos7", "pos8"):
+        ARRAYS[f"data/Aligned_{frequency_pair[0]}_{frequency_pair[1]}_{configuration}.npy"] = (7, 4, 5000)
 
 
 def npy_header(path):
@@ -96,8 +91,6 @@ def main():
     for name, filename in CHECKPOINTS.items():
         directory = ROOT / "results" / name
         config = json.loads((directory / "config.json").read_text())
-        if not (ROOT / config["data_location"]).is_file():
-            raise FileNotFoundError(f"Training data for {name}: {config['data_location']}")
         config["num_channels"] = config["num_components"] + config["num_conditions"]
         model = get_model(SimpleNamespace(**config)).cpu()
         ema = get_ema(model.parameters(), decay=config["ema_rate"])

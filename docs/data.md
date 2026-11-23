@@ -1,14 +1,21 @@
 # Data and model files
 
-Data and model checkpoints for the examples are available at
+The published data and model checkpoints are available at
 [Zenodo 23938017](https://doi.org/10.5281/zenodo.23938017).
+
+Updated standing-wave data, standing-wave model checkpoints and measured
+line-array data are held in an unpublished Zenodo version draft. The table below
+lists the draft package sizes. Its `data_line_array.zip` contains the twelve
+Figure 5 measurement files specified in
+[`configs/figure5_line_array.json`](../configs/figure5_line_array.json).
+The public record linked above remains the earlier published version.
 
 | Archive | Size (GB) |
 | --- | ---: |
 | `weights_free_field.zip` | 0.302 |
 | `weights_kolmogorov.zip` | 0.605 |
 | `weights_era5.zip` | 0.302 |
-| `weights_standing_wave.zip` | 0.550 |
+| `weights_standing_wave.zip` | 0.367 |
 | `weights_line_array.zip` | 0.103 |
 | `weights_baselines.zip` | 0.741 |
 | `acoustic_free_field.npy` | 4.473 |
@@ -16,8 +23,8 @@ Data and model checkpoints for the examples are available at
 | `data_kolmogorov_train.zip.001`–`.009` | 9.175 |
 | `data_kolmogorov_test.zip` | 0.524 |
 | `data_era5.zip` | 2.142 |
-| `data_standing_wave.zip` | 0.764 |
-| `data_line_array.zip` | 0.308 |
+| `data_standing_wave.zip` | 0.290 |
+| `data_line_array.zip` | 0.013 |
 | `data_line_array_simulation.zip` | 2.048 |
 
 The Kolmogorov training archive is distributed as nine consecutive binary
@@ -28,8 +35,9 @@ reconstruct and verify `data_kolmogorov_train.zip`.
 Download the relevant archives and extract them into the repository root. The
 archives create `data/`, `results/<model>/` and the FNO/LNO result directories.
 Every model package includes its configuration and normalization statistics.
-Every data package includes an English description of array dimensions,
-variables and processing.
+The updated standing-wave and measured-array data ZIPs contain the NumPy
+arrays. Their dimensions, variables and processing are described in
+[Case notebooks](cases.md) and the corresponding notebooks.
 
 `acoustic_free_field.npy` is the free-field **training** array. Place it at
 `data/anechoic_high_prec_dataset_last700_2.npy`. The separate test array is
@@ -45,7 +53,6 @@ supplied in `data_free_field_test.zip`.
 | ERA5 | `results/era5_v0` | `checkpoint.pth` |
 | Standing wave, pressure and velocity | `results/1dtube_v31` | `checkpoint.pth` |
 | Standing wave, pressure held out | `results/exp_p_v21` | `checkpoint.pth` |
-| Standing wave, high frequency | `results/1dtube_v41` | `checkpoint.pth` |
 | Measured line array | `results/line_array_v33` | `checkpoint_600.pth` |
 | Simulated line array | `results/line_array_v3` | `checkpoint.pth` |
 

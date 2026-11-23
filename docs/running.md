@@ -29,11 +29,6 @@ python scripts/evaluate_fpe_sampling.py --case tube \
   --checkpoint source=results/1dtube_v31/checkpoint.pth \
   --device cuda:0 --output-dir outputs/tube --save-predictions
 
-python scripts/evaluate_fpe_sampling.py --case line-measured \
-  --config results/line_array_v33/config.json \
-  --checkpoint source=results/line_array_v33/checkpoint_600.pth \
-  --methods pi-iss --device cuda:0 --output-dir outputs/line --save-predictions
-
 python scripts/evaluate_fpe_sampling.py --case era5 \
   --config results/era5_v0/config.json \
   --checkpoint source=results/era5_v0/checkpoint.pth \
@@ -42,8 +37,7 @@ python scripts/evaluate_fpe_sampling.py --case era5 \
 
 Repeat `--checkpoint name=path` to compare two models using paired inputs and
 random seeds. `--max-trials 1 --reverse-steps 2` selects a short implementation
-check; omit these overrides for the case evaluation. The measured-array command
-runs the single-case 10 dB noise example. The Figure 5 frequency pairs and
+check; omit these overrides for the case evaluation. The Figure 5 frequency pairs and
 source configurations are listed in
 [`configs/figure5_line_array.json`](../configs/figure5_line_array.json).
 

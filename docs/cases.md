@@ -14,7 +14,7 @@ Install data and model files at the paths listed in [data.md](data.md). Notebook
 | Free-field plots from CSV | `notebooks/free_field/source_figures.ipynb` | — | — | Plot the two source-data CSV tables |
 | Pressure-only tube | `notebooks/tube/pressure.ipynb` | `results/exp_p_v21` | 500 | 395 Hz; seven of 16 positions observed; nine positions withheld |
 | Pressure–velocity tube | `notebooks/tube/pressure_velocity.ipynb` | `results/1dtube_v31` | 100 | 385 Hz; 12 valid positions; pressure observations and reconstructed velocity by default |
-| Measured line array | `notebooks/line_array/reconstruction_music.ipynb` | `results/line_array_v33`, checkpoint 600 | 500 | Seven sensors, 32 virtual positions; full-vector MUSIC at 2950 Hz |
+| Measured line array | `notebooks/line_array/reconstruction_music.ipynb` | `results/line_array_v33`, checkpoint 600 | 500 | Seven sensors, 32 virtual positions; full-vector MUSIC at the centre frequency of the selected dual-frequency pair |
 | Kolmogorov reconstruction and spectrum | `notebooks/kolmogorov/reconstruction_spectrum.ipynb` | `results/kol_v1_finetune_FPE`, checkpoint 517 | 100 | Regular 6× sampling; velocity error and kinetic-energy spectrum |
 | Kolmogorov spatial downsampling | `notebooks/kolmogorov/downsampling.ipynb` | `results/kol_v1_finetune_FPE`, checkpoint 517 | 100 | 2–6× downsampling and five seeds |
 | ERA5 reconstruction | `notebooks/era5/reconstruction.ipynb` | `results/era5_v0` | 50 | 5% observed positions; four channels |
@@ -28,7 +28,7 @@ Install data and model files at the paths listed in [data.md](data.md). Notebook
 | `data/anechoic_high_prec_dataset_last700_test_2.npy` | `(9,700,64,64,3)` | Sample, physical time, two spatial axes, pressure/velocity-x/velocity-y. The notebook transposes channels and uses `results/2DSound_v22/scalar.npy`. |
 | `data/tube395_resampled_calibrated.npy` | `(1,100000,1,16)` | Sample, physical time, pressure, sensor. The pressure notebook standardizes the measurement during loading and again before sampling. It applies one inverse transform to predictions and compares against the once-standardized reference. |
 | `data/pu385.npy` | `(1,50000,2,15)` | Sample, time, pressure/velocity, sensor. Valid indices are `[1,3,4,5,6,7,8,10,11,12,13,14]`. Means and standard deviations are calculated separately by channel over the full measured record at those positions. |
-| `data/Aligned_2900_3000_pos5.npy` | `(7,4,5000)` | Sensor, pressure/three velocity channels, time. Velocity channels are multiplied by acoustic impedance before reconstruction and divided by the same impedance afterward. |
+| `data/Aligned_<frequency-pair>_<configuration>.npy` | `(7,4,5000)` | One of the three dual-frequency pairs and four two-source configurations in `configs/figure5_line_array.json`; sensor, pressure/three velocity channels, time. Velocity channels are multiplied by acoustic impedance before reconstruction and divided by the same impedance afterward. |
 | `data/kolmogorov/kolmogorov_flow_test.npy` | `(20,400,64,64,2)` | Trajectory, time, spatial axes, two velocity components. The notebook reshapes these into five Reynolds-number groups, uses the checkpoint scalar, and appends forcing and Reynolds-number conditioning channels. |
 | `data/era5/era5_test.npy` | `(1,273,64,64,4)` | Sample, time, spatial axes, zonal wind/meridional wind/temperature/pressure. The supplied fields are already standardized. |
 
@@ -42,7 +42,7 @@ For pressure-only tube reconstruction, `evaluate_fpe_sampling.py --case tube-pre
 
 The pressure–velocity tube notebook uses `MASK_SECOND_CHANNEL=True` and `sensors_to_hide=None`: all 12 valid pressure positions are observed, and all velocity measurements are masked. The per-channel error table evaluates those positions using checkpoint `1dtube_v31`.
 
-The measured line-array notebook demonstrates one four-channel input shared by PI-ISS reconstruction and the seven-sensor MUSIC baseline. Velocity channels are impedance-scaled for the network and converted back once for the physical-array MUSIC calculation. PI-ISS uses 500 reverse steps. The local interference region is x from −0.6 to 0.6 m and z from 1.6 to 1.8 m. Both MUSIC calculations use pressure and all three velocity channels at 2950 Hz. The `line-measured` script is a separate single-case example with 10 dB channel-wise Gaussian noise.
+The measured line-array notebook demonstrates a four-channel input shared by PI-ISS reconstruction and the seven-sensor MUSIC baseline. Velocity channels are impedance-scaled for the network and converted back once for the physical-array MUSIC calculation. PI-ISS uses 500 reverse steps. The local interference region is x from −0.6 to 0.6 m and z from 1.6 to 1.8 m. Both MUSIC calculations use pressure and all three velocity channels at the centre frequency of the selected dual-frequency pair. The Figure 5 input files are the three dual-frequency pairs crossed with the four two-source configurations listed in `configs/figure5_line_array.json`.
 
 The dual-frequency pairs and two-source coordinate configurations used for the Figure 5 benchmark are listed in [`configs/figure5_line_array.json`](../configs/figure5_line_array.json).
 

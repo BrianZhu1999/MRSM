@@ -76,7 +76,7 @@ def parse_args() -> argparse.Namespace:
         default=5e-4,
         help="maximum absolute nRMSE difference from the free-field downsampling CSV for checkpoint NAME=source",
     )
-    parser.add_argument("--power-ceiling-w", type=float, default=250.0)
+    parser.add_argument("--power-ceiling-w", type=float, default=400.0)
     parser.add_argument("--power-poll-seconds", type=float, default=0.25)
     parser.add_argument(
         "--step-sleep-seconds",
