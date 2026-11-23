@@ -41,6 +41,16 @@ check; omit these overrides for the case evaluation. The Figure 5 frequency pair
 source configurations are listed in
 [`configs/figure5_line_array.json`](../configs/figure5_line_array.json).
 
+Plot the twelve Fig. 4d velocity waveforms from a saved physical prediction:
+
+```bash
+python scripts/plot_figure4.py --prediction outputs/tube/prediction_0002.npz \
+  --output-dir outputs/figure4d
+```
+
+The output includes the reference, original prediction, fitted waveform,
+correlation shift, gain and offset for each position.
+
 `--power-ceiling-w` sets a runtime GPU power threshold for the evaluation
 scripts. `--forward-sleep-seconds` in the multi-case evaluator and
 `--step-sleep-seconds` in the free-field evaluator reduce the duty cycle when

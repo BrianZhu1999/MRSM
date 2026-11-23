@@ -1,12 +1,14 @@
 import json
 from pathlib import Path
 import unittest
+import tempfile
+from unittest.mock import patch
 
 import numpy as np
 import torch
 
 from sampler.line_guidance import LineGuidance, join_windows
-from scripts.evaluate_figure5 import load_settings, conditions, network_observation
+from scripts.evaluate_figure5 import load_settings, conditions, network_observation, prediction
 from scripts.line_array_baselines import interpolate, tone_coefficients, synthesize, source_dictionary
 from scripts.line_array_localization import response, peak_starts, refine_plane
 from scripts.line_array_metrics import (matched_source_errors, lobe_measurements,
@@ -91,6 +93,42 @@ class Figure5PublicSettingsTests(unittest.TestCase):
         np.testing.assert_array_equal(observation, changed)
         self.assertEqual(scale, changed_scale)
         self.assertEqual(rms, changed_rms)
+
+    def test_heldout_prediction_contains_the_requested_single_position(self):
+        settings = load_settings()
+        condition = next(conditions(settings))
+        field = np.zeros((7, 4, 1002))
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            path = root/settings['files']['heldout_prediction'].format(
+                case=condition['case'], seed=1, heldout=3)
+            path.parent.mkdir(parents=True)
+            target = np.full((1, 4, 1002), .25)
+            np.savez_compressed(path, physical=target, sensor_index=3, generated_index=15)
+            result = prediction(root, root/'output', settings, condition, field, 1, 3, False, 'cpu')
+            np.testing.assert_array_equal(result, target)
+            np.savez_compressed(path, physical=target, sensor_index=2, generated_index=10)
+            with self.assertRaises(ValueError):
+                prediction(root, root/'output', settings, condition, field, 1, 3, False, 'cpu')
+
+    def test_fresh_heldout_prediction_saves_only_its_target_position(self):
+        settings = load_settings()
+        condition = next(conditions(settings))
+        field = np.zeros((7, 4, 1002))
+        full = np.broadcast_to(np.arange(32)[:, None, None], (32, 4, 1002)).copy()
+        def sampled(*args):
+            args[-1].mkdir(parents=True)
+            return full, {}
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            with patch('scripts.evaluate_figure5.sample_prediction', side_effect=sampled):
+                result = prediction(root, root/'output', settings, condition, field, 1, 3, True, 'cpu')
+            np.testing.assert_array_equal(result, full[15:16])
+            path = root/'output/predictions/heldout'/condition['case']/'h3_seed1/prediction.npz'
+            with np.load(path) as saved:
+                self.assertEqual(saved['physical'].shape, (1, 4, 1002))
+                self.assertEqual(int(saved['sensor_index']), 3)
+                self.assertEqual(int(saved['generated_index']), 15)
 
     def test_response_derivatives_and_equivalent_source_dictionary(self):
         coords = np.array(load_settings()['sensor_coordinates_m'])

@@ -132,6 +132,9 @@ def sample_prediction(root, settings, field, frequencies, keep, seed, device, ou
 
 def prediction(root, output_dir, settings, condition, field, seed, heldout, resample, device):
     task = 'localization' if heldout is None else 'heldout'
+    if heldout is not None and heldout not in settings['heldout_indices']:
+        raise ValueError("held-out sensor must be one of the five internal positions")
+    generated_index = None if heldout is None else settings['observed_generated_indices'][heldout]
     tokens = dict(condition, seed=seed, heldout=heldout)
     if resample:
         keep = np.asarray([i for i in range(7) if i != heldout])
@@ -141,13 +144,22 @@ def prediction(root, output_dir, settings, condition, field, seed, heldout, resa
             raise FileExistsError(path)
         values, report = sample_prediction(root, settings, field, condition['frequencies'],
                                            keep, seed, device, path.parent)
-        np.savez_compressed(path, physical=values)
+        if heldout is None:
+            np.savez_compressed(path, physical=values)
+        else:
+            values = values[generated_index:generated_index+1]
+            np.savez_compressed(path, physical=values, sensor_index=heldout,
+                                generated_index=generated_index)
         save_json(path.with_name('sampling.json'), report)
     else:
         path = root/settings['files'][task+'_prediction'].format(**tokens)
         with np.load(path, allow_pickle=False) as saved:
             values = saved['physical'].copy()
-    if values.shape != (32, 4, 1002) or not np.isfinite(values).all():
+            if heldout is not None and (int(saved['sensor_index']) != heldout
+                                       or int(saved['generated_index']) != generated_index):
+                raise ValueError(f"held-out prediction coordinates do not match: {path}")
+    expected_shape = (32 if heldout is None else 1, 4, 1002)
+    if values.shape != expected_shape or not np.isfinite(values).all():
         raise ValueError(f"invalid prediction: {path}")
     return values
 
@@ -222,7 +234,7 @@ def evaluate_heldout(root, output_dir, settings, selected, resample=False, devic
             for seed in settings['heldout_seeds']:
                 values = prediction(root, output_dir, settings, condition, field,
                                     seed, heldout, resample, device)
-                outputs.append(('PI-ISS', seed, values[5*heldout:5*heldout+1]))
+                outputs.append(('PI-ISS', seed, values))
             folder = output_dir/'heldout'/condition['case']/f'h{heldout}'
             folder.mkdir(parents=True, exist_ok=True)
             save_json(folder/'ridge_selection.json', details)
