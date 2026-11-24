@@ -25,9 +25,9 @@ from scripts.line_array_metrics import (waveform_metrics, double_tone_projection
 def load_settings(path=None):
     settings = json.loads(Path(path or ROOT/'configs/figure5_line_array.json').read_text(encoding='utf-8'))
     pairs = settings['dual_frequency_hz']
-    positions = [item['position'] for item in settings['source_configurations']]
-    if pairs != [[2800, 2900], [2800, 3000], [2900, 3000]] or positions != [3, 4, 7, 8]:
-        raise ValueError("Figure 5 requires the three specified frequency pairs and positions 3,4,7,8")
+    configurations = [item['name'] for item in settings['source_configurations']]
+    if pairs != [[2800, 2900], [2800, 3000], [2900, 3000]] or configurations != ['A', 'B', 'C', 'D']:
+        raise ValueError("Figure 5 requires the three specified frequency pairs and configurations A, B, C, D")
     return settings
 
 
@@ -35,8 +35,8 @@ def conditions(settings):
     for frequencies in settings['dual_frequency_hz']:
         pair = '_'.join(map(str, frequencies))
         for configuration in settings['source_configurations']:
-            yield dict(pair=pair, position=configuration['position'],
-                       case=f"{pair}_pos{configuration['position']}",
+            yield dict(pair=pair, configuration=configuration['name'],
+                       case=f"{pair}_{configuration['name']}",
                        frequencies=frequencies,
                        truth=np.asarray(configuration['sources_xz_m'], float))
 
@@ -190,11 +190,11 @@ def evaluate_localization(root, output_dir, settings, selected, resample=False, 
                 token = f"{fields.index(name)}_seed{seed or 0}_{method}"
                 np.savez_compressed(folder/f'{token}.npz', **arrays)
                 rows.append(dict(case=condition['case'], pair=condition['pair'],
-                    position=condition['position'], method=method, field=name, seed=seed,
+                    configuration=condition['configuration'], method=method, field=name, seed=seed,
                     geometry='plane', input_sensor_budget=7, output_positions=len(field),
                     **metrics))
         save_csv(output_dir/'localization_runs.csv', rows)
-    units = average_seeds(rows, ['pair', 'position', 'method', 'field'],
+    units = average_seeds(rows, ['pair', 'configuration', 'method', 'field'],
                           ['localization_rmse_cm', 'extra_to_weak_db'])
     save_csv(output_dir/'boxplot_localization_by_condition.csv', units)
     if len(selected) == 12:
@@ -202,12 +202,12 @@ def evaluate_localization(root, output_dir, settings, selected, resample=False, 
         for method in settings['localization_methods']:
             for metric in ('localization_rmse_cm', 'extra_to_weak_db'):
                 reference = [r for r in units if r['method'] == method and r['field'] == fields[-1]]
-                reference.sort(key=lambda row: (row['pair'], row['position']))
+                reference.sort(key=lambda row: (row['pair'], row['configuration']))
                 reference_values = [r[metric] for r in reference]
-                groups = [r['position'] for r in reference]
+                groups = [r['configuration'] for r in reference]
                 for field_name in fields:
                     values = [r for r in units if r['method'] == method and r['field'] == field_name]
-                    values.sort(key=lambda row: (row['pair'], row['position']))
+                    values.sort(key=lambda row: (row['pair'], row['configuration']))
                     if any(r[metric] is None for r in values):
                         continue
                     summaries.append(dict(method=method, field=field_name, metric=metric,
@@ -245,13 +245,13 @@ def evaluate_heldout(root, output_dir, settings, selected, resample=False, devic
                     prediction_projected=double_tone_projection(values, condition['frequencies']),
                     reference_projected=double_tone_projection(reference, condition['frequencies']),
                     observed=observed, sensor_indices=keep, frequencies=condition['frequencies'])
-                rows.append(dict(pair=condition['pair'], position=condition['position'],
+                rows.append(dict(pair=condition['pair'], configuration=condition['configuration'],
                     heldout_index=heldout, sensor_id=settings['sensor_ids'][heldout],
                     method=name, seed=seed, calibration='per_case_alignment',
                     **waveform_metrics(values, reference, condition['frequencies'])))
             save_csv(output_dir/'heldout_per_run_metrics.csv', rows)
     metric_names = [f'double_tone_projection_{c}_nrmse' for c in settings['channels']]
-    keys = ['pair', 'position', 'heldout_index', 'sensor_id', 'method']
+    keys = ['pair', 'configuration', 'heldout_index', 'sensor_id', 'method']
     units = average_seeds(rows, keys, metric_names)
     save_csv(output_dir/'boxplot_heldout_by_sensor.csv', units)
     channels = [dict(**{key: row[key] for key in keys}, channel=channel,
@@ -262,12 +262,12 @@ def evaluate_heldout(root, output_dir, settings, selected, resample=False, devic
         summaries, paired = [], []
         for channel in settings['channels']:
             reference = [r for r in channels if r['method'] == 'PI-ISS' and r['channel'] == channel]
-            reference.sort(key=lambda row: (row['pair'], row['position'], row['heldout_index']))
-            groups = [r['position'] for r in reference]
+            reference.sort(key=lambda row: (row['pair'], row['configuration'], row['heldout_index']))
+            groups = [r['configuration'] for r in reference]
             for method in ('Linear interpolation', 'Cubic spline', 'Plane-wave ridge',
                            'Equivalent sources', 'PI-ISS'):
                 values = [r for r in channels if r['method'] == method and r['channel'] == channel]
-                values.sort(key=lambda row: (row['pair'], row['position'], row['heldout_index']))
+                values.sort(key=lambda row: (row['pair'], row['configuration'], row['heldout_index']))
                 summaries.append(dict(channel=channel, method=method,
                     **grouped_median_interval([r['channel_nrmse'] for r in values], groups)))
                 if method != 'PI-ISS':

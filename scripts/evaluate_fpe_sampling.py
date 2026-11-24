@@ -74,8 +74,6 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--resume", action="store_true")
     parser.add_argument("--save-predictions", action="store_true")
     parser.add_argument("--reverse-steps", type=int, default=None, help="override the number of reverse sampling steps")
-    parser.add_argument("--tube-measurements", type=Path, default=None,
-                        help="physical pressure/velocity NPZ")
     parser.add_argument("--tube-scale-source", choices=("record", "training", "pressure-training"), default=None,
                         help="tube scaling from record, training, or measured pressure with training channel ratios")
     parser.add_argument("--tube-training-statistics", type=Path, default=None,
@@ -743,22 +741,9 @@ def evaluate_tube(args: argparse.Namespace, cfg: SimpleNamespace, model: torch.n
                   device: torch.device, trial_callback) -> None:
     settings = json.loads((SOURCE_ROOT / "configs/figure4_tube.json").read_text(encoding="utf-8"))
     valid_sensors = np.array(settings["sensor_indices_zero_based"])
-    measurements_path = getattr(args, "tube_measurements", None)
-    data_path = measurements_path or SOURCE_ROOT / settings["data_path"]
-    if measurements_path is None:
-        data = np.load(data_path, mmap_mode="r")
-        measured = np.asarray(data[:, :, :, valid_sensors])
-    else:
-        with np.load(data_path) as data:
-            measured = data["pressure_velocity"]
-            if measured.shape != (1, 50000, 2, 12) or not np.isfinite(measured).all():
-                raise ValueError("tube measurements must have finite shape [1, 50000, 2, 12]")
-            if not np.array_equal(data["sensor_indices_zero_based"], valid_sensors):
-                raise ValueError("tube sensor indices must match the 12 sensors in figure4_tube.json")
-            if (float(data["sampling_rate_hz"]) != 1 / settings["physics_params"]["physics_dt"]
-                    or float(data["excitation_frequency_hz"]) != settings["excitation_frequency_hz"]
-                    or data["channel_units"].tolist() != ["Pa", "m/s"]):
-                raise ValueError("tube measurements require 385 Hz excitation, 10000 Hz sampling, and Pa/m/s units")
+    data_path = SOURCE_ROOT / settings["data_path"]
+    data = np.load(data_path, mmap_mode="r")
+    measured = np.asarray(data[:, :, :, valid_sensors])
     scale_source = args.tube_scale_source or settings["scale_source"]
     statistics_path = args.tube_training_statistics or SOURCE_ROOT / settings["training_statistics_path"]
     scaler = tube_scaler(measured, device, scale_source, statistics_path)
@@ -794,8 +779,6 @@ def evaluate_tube(args: argparse.Namespace, cfg: SimpleNamespace, model: torch.n
                 "pressure_sensor_count": 12,
                 "velocity_observation_count": 0,
             }
-            if measurements_path is not None:
-                trial["measurement_path"] = str(data_path)
             if trial_callback.is_complete(method, trial):
                 continue
             setup_seed(settings["sampling_seed"])

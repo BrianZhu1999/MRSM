@@ -59,7 +59,7 @@ ARRAYS = {
 }
 
 for frequency_pair in ((2800, 2900), (2800, 3000), (2900, 3000)):
-    for configuration in ("pos3", "pos4", "pos7", "pos8"):
+    for configuration in ("A", "B", "C", "D"):
         ARRAYS[f"data/Aligned_{frequency_pair[0]}_{frequency_pair[1]}_{configuration}.npy"] = (7, 4, 5000)
 
 

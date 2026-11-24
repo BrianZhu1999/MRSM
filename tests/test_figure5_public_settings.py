@@ -20,7 +20,10 @@ class Figure5PublicSettingsTests(unittest.TestCase):
     def test_twelve_conditions_and_real_sampling_settings(self):
         settings = load_settings()
         self.assertEqual(len(list(conditions(settings))), 12)
-        self.assertEqual({c['position'] for c in conditions(settings)}, {3, 4, 7, 8})
+        self.assertEqual({c['configuration'] for c in conditions(settings)}, {'A', 'B', 'C', 'D'})
+        self.assertEqual({c['case'] for c in conditions(settings)},
+                         {f'{pair}_{label}' for pair in ('2800_2900', '2800_3000', '2900_3000')
+                          for label in ('A', 'B', 'C', 'D')})
         self.assertEqual(settings['localization_seeds'], [3, 4, 5])
         self.assertEqual(settings['heldout_seeds'], [1, 2, 3])
         self.assertEqual(settings['heldout_indices'], [1, 2, 3, 4, 5])
@@ -45,7 +48,7 @@ class Figure5PublicSettingsTests(unittest.TestCase):
         notebook = json.loads((root/'notebooks/line_array/reconstruction_music.ipynb').read_text(encoding='utf-8'))
         self.assertTrue(all(not c.get('outputs') for c in notebook['cells']))
         settings = load_settings()
-        self.assertEqual(settings['source_configurations'][0]['position'], 3)
+        self.assertEqual(settings['source_configurations'][0]['name'], 'A')
         self.assertEqual(settings['dual_frequency_hz'][1], [2800, 3000])
 
     def test_source_matching_minimizes_squared_distance(self):
@@ -189,11 +192,11 @@ class Figure5PublicSettingsTests(unittest.TestCase):
         self.assertTrue(torch.equal(a, b))
 
     def test_seed_metrics_average_before_configuration_resampling(self):
-        rows = [dict(pair='2800_3000', position=3, seed=seed, value=value)
+        rows = [dict(pair='2800_3000', configuration='A', seed=seed, value=value)
                 for seed, value in [(3, 1.), (4, 2.), (5, 6.)]]
-        units = average_seeds(rows, ['pair', 'position'], ['value'])
+        units = average_seeds(rows, ['pair', 'configuration'], ['value'])
         self.assertEqual(units[0]['value'], 3.)
-        configurations = np.repeat([3, 4, 7, 8], 3)
+        configurations = np.repeat(['A', 'B', 'C', 'D'], 3)
         values = np.arange(12, dtype=float)
         summary = grouped_median_interval(values, configurations)
         self.assertEqual(summary['resamples'], 256)

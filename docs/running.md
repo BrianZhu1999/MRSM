@@ -56,21 +56,6 @@ scripts. `--forward-sleep-seconds` in the multi-case evaluator and
 `--step-sleep-seconds` in the free-field evaluator reduce the duty cycle when
 needed. GPU indices refer to the devices visible to the process.
 
-## Tube measurements
-
-
-```bash
-python scripts/evaluate_fpe_sampling.py --case tube \
-  --config results/1dtube_v31/config.json \
-  --checkpoint source=results/1dtube_v31/checkpoint.pth \
-  --tube-measurements data/tube385_physical.npz \
-  --tube-scale-source pressure-training --methods pi-iss \
-  --device cuda:2 --output-dir outputs/tube_physical --save-predictions
-```
-
-`pressure-training` scales velocity using the measured pressure standard
-deviation and the saved training-channel ratio.
-
 ## Figure 5
 
 ```bash
@@ -88,7 +73,7 @@ python scripts/evaluate_figure5.py --task all --resample \
 ```
 
 `--resample` generates fields from the released FPE checkpoint before evaluation.
-`--case 2800_3000_pos3` selects the notebook example.
+`--case 2800_3000_A` selects the notebook example.
 
 ## Optimization settings
 

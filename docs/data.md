@@ -71,7 +71,9 @@ describes their aggregation and filtering.
 
 For Figure 5, `data/figure5/localization/` and `data/figure5/heldout/` contain
 four-channel fields with shape `(7,4,1002)`. Pressure is in Pa and velocity is
-in m/s. `coordinates.npz` gives physical and virtual coordinates in metres.
+in m/s. Filenames use `<frequency-pair>_<configuration>`, with configurations
+`A`, `B`, `C` and `D` (for example, `2800_3000_A.npz`). `coordinates.npz` gives
+physical and virtual coordinates in metres.
 `figure5_results.zip` extracts predictions and tables to `source_data/figure5/`.
 The array paths and sampling settings are specified in
 [`configs/figure5_line_array.json`](../configs/figure5_line_array.json).
